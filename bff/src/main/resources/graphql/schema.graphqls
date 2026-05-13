@@ -1,0 +1,9 @@
+type Query{
+    merged : Result
+}
+
+type Result {
+    service1 : String
+    service2 : String
+    service3 : String
+}
