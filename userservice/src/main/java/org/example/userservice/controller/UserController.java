@@ -29,9 +29,4 @@ public class UserController {
         return userService.getAllUsers();
     }
 
-    @GetMapping("/users/{username}")
-    public UserEntity getUserByUsername(@PathVariable String username) {
-        return userService.findByUsername(username);
-    }
-
 }
