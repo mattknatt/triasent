@@ -15,8 +15,8 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/users")
-    public void createUser(@RequestBody UserEntity user) {
-        userService.saveUser(user);
+    public UserEntity createUser(@RequestBody UserEntity user) {
+        return userService.saveUser(user);
     }
 
     @GetMapping("/users/{id}")
@@ -27,6 +27,11 @@ public class UserController {
     @GetMapping("/users")
     public List<UserEntity> getAllUsers() {
         return userService.getAllUsers();
+    }
+
+    @GetMapping("/users/{username}")
+    public UserEntity getUserByUsername(@PathVariable String username) {
+        return userService.findByUsername(username);
     }
 
 }
