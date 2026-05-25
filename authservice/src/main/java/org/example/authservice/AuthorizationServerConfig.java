@@ -6,9 +6,6 @@ import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
@@ -21,7 +18,6 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -60,18 +56,6 @@ public class AuthorizationServerConfig {
                 .issuer("http://127.0.0.1:9000")
                 .build();
     }
-
-    @Bean
-    public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder) {
-        UserDetails user = User.builder()
-                .username("demo")
-                .password(passwordEncoder.encode("demo")) // Krypterar "demo" korrekt
-                .roles("USER")
-                .build();
-
-        return new InMemoryUserDetailsManager(user);
-    }
-
 
     @Bean
     public PasswordEncoder passwordEncoder() {

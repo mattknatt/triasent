@@ -1,24 +1,66 @@
 package org.example.userservice;
 
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import org.example.grpc.GreetingServiceGrpc;
-import org.example.grpc.HelloRequest;
-import org.example.grpc.HelloResponse;
+import lombok.RequiredArgsConstructor;
+import org.example.grpc.GetUserRequest;
+import org.example.grpc.UserProfile;
+import org.example.grpc.UserServiceGrpc;
+import org.example.grpc.VerifyCredentialsRequest;
+import org.example.grpc.VerifyCredentialsResponse;
+import org.example.userservice.model.UserEntity;
+import org.example.userservice.repository.UserRepository;
 import org.springframework.grpc.server.service.GrpcService;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.UUID;
 
 @GrpcService
-public class GrpcServerService extends GreetingServiceGrpc.GreetingServiceImplBase {
+@RequiredArgsConstructor
+public class GrpcServerService extends UserServiceGrpc.UserServiceImplBase {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
-    public void sayHello(HelloRequest request, StreamObserver<HelloResponse> responseObserver) {
-        String name = request.getName();
-        String message = "Hello " + name + " from Service 3 via gRPC!";
+    public void getUserProfile(GetUserRequest request, StreamObserver<UserProfile> responseObserver) {
+        UUID userId;
+        try {
+            userId = UUID.fromString(request.getUserId());
+        } catch (IllegalArgumentException e) {
+            responseObserver.onError(Status.INVALID_ARGUMENT.withDescription("Invalid user ID").asRuntimeException());
+            return;
+        }
 
-        HelloResponse response = HelloResponse.newBuilder()
-                .setMessage(message)
+        UserEntity user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            responseObserver.onError(Status.NOT_FOUND.withDescription("User not found").asRuntimeException());
+            return;
+        }
+
+        UserProfile profile = UserProfile.newBuilder()
+                .setId(user.getId().toString())
+                .setUsername(user.getUsername())
+                .setRole(user.getRole() != null ? user.getRole().name() : "")
                 .build();
 
-        responseObserver.onNext(response);
+        responseObserver.onNext(profile);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void verifyCredentials(VerifyCredentialsRequest request, StreamObserver<VerifyCredentialsResponse> responseObserver) {
+        UserEntity user = userRepository.findByUsername(request.getUsername());
+        boolean valid = user != null && passwordEncoder.matches(request.getPassword(), user.getPassword());
+
+        VerifyCredentialsResponse.Builder response = VerifyCredentialsResponse.newBuilder().setValid(valid);
+        if (valid) {
+            response.setId(user.getId().toString())
+                    .setUsername(user.getUsername())
+                    .setRole(user.getRole() != null ? user.getRole().name() : "");
+        }
+
+        responseObserver.onNext(response.build());
         responseObserver.onCompleted();
     }
 }
