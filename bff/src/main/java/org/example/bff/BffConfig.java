@@ -1,5 +1,6 @@
 package org.example.bff;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -17,6 +18,12 @@ import static org.springframework.web.servlet.function.RouterFunctions.route;
 
 @Configuration
 public class BffConfig {
+
+    @Value("${messageservice.host:localhost}")
+    private String messageserviceHost;
+
+    @Value("${userservice.host:localhost}")
+    private String userserviceHost;
 
     @Bean
     SecurityFilterChain security(HttpSecurity http) {
@@ -38,7 +45,7 @@ public class BffConfig {
         return route()
                 .GET("/api/messages", http())
                 .POST("/api/messages", http())
-                .before(uri("http://localhost:8081/"))
+                .before(uri("http://" + messageserviceHost + ":8081/"))
                 .before(setPath("/messages"))
                 .filter(tokenRelay())
                 .build();
@@ -64,7 +71,7 @@ public class BffConfig {
         // /api/test -> http://localhost:8083/api/test
         return route()
                 .GET("/api/test3", http())
-                .before(uri("http://localhost:8083/"))
+                .before(uri("http://" + userserviceHost + ":8083/"))
                 .before(setPath("/api/test"))
                 .filter((request, next) -> {
                     // Hämta användarnamnet från Principal (Spring Security)
