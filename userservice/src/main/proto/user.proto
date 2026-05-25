@@ -8,6 +8,7 @@ package user;
 
 service UserService {
   rpc GetUserProfile (GetUserRequest) returns (UserProfile);
+  rpc VerifyCredentials (VerifyCredentialsRequest) returns (VerifyCredentialsResponse);
 }
 
 message GetUserRequest {
@@ -18,4 +19,16 @@ message UserProfile {
   string id = 1;
   string username = 2;
   string role = 3;
+}
+
+message VerifyCredentialsRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message VerifyCredentialsResponse {
+  bool valid = 1;
+  string id = 2;
+  string username = 3;
+  string role = 4;
 }

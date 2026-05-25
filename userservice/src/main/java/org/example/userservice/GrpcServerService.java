@@ -6,9 +6,12 @@ import lombok.RequiredArgsConstructor;
 import org.example.grpc.GetUserRequest;
 import org.example.grpc.UserProfile;
 import org.example.grpc.UserServiceGrpc;
+import org.example.grpc.VerifyCredentialsRequest;
+import org.example.grpc.VerifyCredentialsResponse;
 import org.example.userservice.model.UserEntity;
 import org.example.userservice.repository.UserRepository;
 import org.springframework.grpc.server.service.GrpcService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.UUID;
 
@@ -17,6 +20,7 @@ import java.util.UUID;
 public class GrpcServerService extends UserServiceGrpc.UserServiceImplBase {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public void getUserProfile(GetUserRequest request, StreamObserver<UserProfile> responseObserver) {
@@ -41,6 +45,22 @@ public class GrpcServerService extends UserServiceGrpc.UserServiceImplBase {
                 .build();
 
         responseObserver.onNext(profile);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void verifyCredentials(VerifyCredentialsRequest request, StreamObserver<VerifyCredentialsResponse> responseObserver) {
+        UserEntity user = userRepository.findByUsername(request.getUsername());
+        boolean valid = user != null && passwordEncoder.matches(request.getPassword(), user.getPassword());
+
+        VerifyCredentialsResponse.Builder response = VerifyCredentialsResponse.newBuilder().setValid(valid);
+        if (valid) {
+            response.setId(user.getId().toString())
+                    .setUsername(user.getUsername())
+                    .setRole(user.getRole() != null ? user.getRole().name() : "");
+        }
+
+        responseObserver.onNext(response.build());
         responseObserver.onCompleted();
     }
 }
