@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Triasent Demo Client</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+        section { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 6px; }
+        h2 { margin-top: 0; }
+        label { display: block; margin: .5rem 0 .2rem; font-size: .9rem; }
+        input, select, textarea { width: 100%; padding: .4rem; box-sizing: border-box; }
+        button { margin-top: .5rem; padding: .5rem 1rem; cursor: pointer; }
+        pre { background: #f4f4f4; padding: .5rem; border-radius: 4px; overflow-x: auto; font-size: .85rem; }
+        .row { display: flex; gap: .5rem; }
+        .row > * { flex: 1; }
+    </style>
+</head>
+<body>
+
+<h1>Triasent</h1>
+
+<section>
+    <h2>1. Create user</h2>
+    <p>Public endpoint. No auth needed.</p>
+    <div class="row">
+        <div>
+            <label>Username</label>
+            <input id="newUsername" value="alice">
+        </div>
+        <div>
+            <label>Password</label>
+            <input id="newPassword" type="password" value="pw">
+        </div>
+        <div>
+            <label>Role</label>
+            <select id="newRole">
+                <option>CUSTOMER</option>
+                <option>HANDLER</option>
+            </select>
+        </div>
+    </div>
+    <button onclick="createUser()">Create</button>
+    <pre id="createResult"></pre>
+</section>
+
+<section>
+    <h2>2. Log in</h2>
+    <p>Kicks off the OAuth Authorization Code flow. You'll be redirected to authservice's login page and back.</p>
+    <button onclick="login()">Log in</button>
+    <button onclick="checkAuth()">Check session</button>
+    <pre id="authResult"></pre>
+</section>
+
+<section>
+    <h2>3. Messages</h2>
+    <p>Requires an active session. BFF relays the JWT to messageservice.</p>
+    <label>New message content</label>
+    <textarea id="messageContent" rows="2">hello from the demo client</textarea>
+    <button onclick="postMessage()">Post</button>
+    <button onclick="loadMessages()">Refresh list</button>
+    <pre id="messagesResult"></pre>
+</section>
+
+<script>
+    async function showJson(elId, response) {
+        const el = document.getElementById(elId);
+        const text = await response.text();
+        try { el.textContent = JSON.stringify(JSON.parse(text), null, 2); }
+        catch { el.textContent = `[${response.status}] ${text}`; }
+    }
+
+    async function createUser() {
+        const body = {
+            username: document.getElementById('newUsername').value,
+            password: document.getElementById('newPassword').value,
+            role: document.getElementById('newRole').value,
+        };
+        const r = await fetch('/api/users', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+        await showJson('createResult', r);
+    }
+
+    function login() {
+        // Triggers Spring's OAuth2 client redirect to authservice's login form.
+        window.location.href = '/oauth2/authorization/authservice';
+    }
+
+    async function checkAuth() {
+        const r = await fetch('/api/messages', { redirect: 'manual' });
+        document.getElementById('authResult').textContent =
+            r.type === 'opaqueredirect' || r.status === 0
+                ? 'Not logged in (would be redirected to login).'
+                : `Logged in. /api/messages returned ${r.status}.`;
+    }
+
+    async function postMessage() {
+        const r = await fetch('/api/messages', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ content: document.getElementById('messageContent').value }),
+        });
+        await showJson('messagesResult', r);
+    }
+
+    async function loadMessages() {
+        const r = await fetch('/api/messages');
+        await showJson('messagesResult', r);
+    }
+</script>
+</body>
+</html>
