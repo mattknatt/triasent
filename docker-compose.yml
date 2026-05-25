@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: users_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  userservice:
+    image: userservice:0.0.1-SNAPSHOT
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_HOST: postgres
+    ports:
+      - "8083:8083"
+
+  authservice:
+    image: authservice:0.0.1-SNAPSHOT
+    depends_on:
+      - userservice
+    restart: on-failure
+    environment:
+      USERSERVICE_HOST: userservice
+      AUTHSERVICE_HOST: authservice
+    ports:
+      - "9000:9000"
+
+  messageservice:
+    image: messageservice:0.0.1-SNAPSHOT
+    depends_on:
+      - postgres
+      - rabbitmq
+      - userservice
+      - authservice
+    restart: on-failure
+    environment:
+      POSTGRES_HOST: postgres
+      RABBITMQ_HOST: rabbitmq
+      USERSERVICE_HOST: userservice
+      AUTHSERVICE_HOST: authservice
+    ports:
+      - "8081:8081"
+
+  bff:
+    image: bff:0.0.1-SNAPSHOT
+    depends_on:
+      - authservice
+      - messageservice
+    restart: on-failure
+    environment:
+      AUTHSERVICE_HOST: authservice
+      MESSAGESERVICE_HOST: messageservice
+      USERSERVICE_HOST: userservice
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
