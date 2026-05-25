@@ -26,9 +26,10 @@ public class BffConfig {
     private String userserviceHost;
 
     @Bean
-    SecurityFilterChain security(HttpSecurity http) {
+    SecurityFilterChain security(HttpSecurity http) throws Exception {
         return http
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/users").permitAll()
                         .anyRequest().authenticated()
                 )
                 .csrf(csrf -> csrf.disable())
@@ -36,6 +37,16 @@ public class BffConfig {
                 .oauth2Login(Customizer.withDefaults())
                 // Enable OAuth2 client (needed for tokenRelay)
                 .oauth2Client(Customizer.withDefaults())
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> usersRoute() {
+        // POST /api/users -> http://userservice:8083/users (unauthenticated, for account creation)
+        return route()
+                .POST("/api/users", http())
+                .before(uri("http://" + userserviceHost + ":8083/"))
+                .before(setPath("/users"))
                 .build();
     }
 
