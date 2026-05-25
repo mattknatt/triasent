@@ -33,26 +33,16 @@ public class BffConfig {
     }
 
     @Bean
-    public RouterFunction<ServerResponse> route1() {
-        // /api/test -> http://localhost:8081/api/test
+    public RouterFunction<ServerResponse> messagesRoute() {
+        // /api/messages -> http://localhost:8081/messages (GET + POST)
         return route()
-                .GET("/api/test", http())
+                .GET("/api/messages", http())
+                .POST("/api/messages", http())
                 .before(uri("http://localhost:8081/"))
+                .before(setPath("/messages"))
                 .filter(tokenRelay())
                 .build();
     }
-
-    @Bean
-    public RouterFunction<ServerResponse> route2() {
-        // /api/test2 -> http://localhost:8082/api/test
-        return route()
-                .GET("/api/test2", http())
-                .before(uri("http://localhost:8082/"))
-                .before(setPath("/api/test"))
-                .filter(tokenRelay())
-                .build();
-    }
-
 //    @Bean
 //    public RouterFunction<ServerResponse> route1WithSetPathAndSegment() {
 //        // /test -> http://localhost:8081/api/test
