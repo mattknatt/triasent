@@ -9,7 +9,7 @@ images already in your local Docker, which is why every app sets `imagePullPolic
 
 | File | Compose service(s) it replaces |
 |------|--------------------------------|
-| `postgres.yaml`       | `postgres` (+ a PersistentVolumeClaim for the data volume) |
+| `postgres.yaml`       | `postgres` (a **StatefulSet** — its volume is managed via `volumeClaimTemplates`) |
 | `rabbitmq.yaml`       | `rabbitmq` |
 | `userservice.yaml`    | `userservice` |
 | `authservice.yaml`    | `authservice` |
@@ -18,10 +18,11 @@ images already in your local Docker, which is why every app sets `imagePullPolic
 | `client.yaml`         | `client` (nginx) |
 | `create-configmaps.sh`| the three bind-mounted files (see below) |
 
-Each file has a **Deployment** ("run the container") and a **Service** ("give it a
-stable name other pods reach it by"). The Service names match the `*_HOST` env vars,
-so the apps find each other exactly like they did in compose. `depends_on` is dropped —
-Kubernetes starts everything and the apps retry until their dependencies are up.
+Each file has a workload (**Deployment** = "run the container", or a **StatefulSet** for
+Postgres since it owns persistent data) plus a **Service** ("give it a stable name other
+pods reach it by"). The Service names match the `*_HOST` env vars, so the apps find each
+other exactly like they did in compose. `depends_on` is dropped — Kubernetes starts
+everything and the apps retry until their dependencies are up.
 
 The three files that compose bind-mounted become **ConfigMaps**, generated from the real
 files by `create-configmaps.sh` (single source of truth):
@@ -78,14 +79,40 @@ kubectl port-forward service/rabbitmq 15672:15672   # then http://localhost:1567
 If you edit `client/nginx.conf`, `client/index.html`, or `docker/init-db.sh`, re-run
 `bash k8s/create-configmaps.sh` and restart the affected pod
 (`kubectl rollout restart deployment/client`). The Postgres init script only runs on a
-**fresh** data volume, so changes to it require deleting the PVC (see teardown).
+**fresh** data volume, so changes to it require deleting the PVC `data-postgres-0` and
+restarting Postgres (`kubectl rollout restart statefulset/postgres`).
 
-## Teardown
+## Pausing vs. tearing down
 
+Everything here is declarative, so the cluster is disposable — recreate it any time with
+`kubectl apply -f k8s/`. Pick based on whether you want to **keep the Postgres data**.
+
+> ℹ️ The Postgres PVC (`data-postgres-0`) is created by the StatefulSet's
+> `volumeClaimTemplates`, **not** by a file in `k8s/`. So `kubectl delete -f k8s/` does
+> **not** delete it — your data survives a teardown. To actually wipe the DB you must
+> delete the PVC explicitly (the default `hostpath` StorageClass reclaims it on delete).
+
+**Pause and keep data** (e.g. coming back to it later):
 ```sh
-kubectl delete -f k8s/          # removes Deployments + Services (and the PVC definition)
-# data may persist in the volume; to wipe the DB entirely:
-kubectl delete pvc postgres-data
+# easiest: just quit Docker Desktop — workloads and data return on reopen.
+# or, keep the cluster up but stop the pods:
+kubectl scale deployment,statefulset --all --replicas=0   # resume with --replicas=1
+```
+
+**Tear down workloads, keep data** (re-`apply` later and the DB is still there):
+```sh
+kubectl delete -f k8s/          # removes Deployments, StatefulSet, Services (PVC stays)
+kubectl delete configmap nginx-config client-html postgres-init   # the generated ConfigMaps
+```
+
+**Wipe the database too** (clean slate):
+```sh
+kubectl delete pvc data-postgres-0
+```
+
+**Stop the port-forwards** when done:
+```sh
+pkill -f "kubectl port-forward"
 ```
 
 ## Notes / possible next steps

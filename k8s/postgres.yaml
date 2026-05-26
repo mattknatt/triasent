@@ -1,18 +1,9 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-data        # replaces the "postgres_data" named volume in compose
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: 1Gi
----
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgres
 spec:
+  serviceName: postgres          # must match the headless Service below
   replicas: 1
   selector:
     matchLabels:
@@ -40,19 +31,27 @@ spec:
             - name: init
               mountPath: /docker-entrypoint-initdb.d   # init-db.sh runs here on first start
       volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: postgres-data
         - name: init
           configMap:
             name: postgres-init       # created by create-configmaps.sh
             defaultMode: 0755         # make the .sh executable
+  # StatefulSet manages the PVC itself (replaces the standalone PVC we had as a Deployment).
+  # This creates a PVC named "data-postgres-0", tied to the pod's identity.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: postgres                      # other pods reach the DB at host "postgres"
 spec:
+  clusterIP: None                     # headless: required to govern the StatefulSet
   selector:
     app: postgres
   ports:
