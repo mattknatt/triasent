@@ -10,7 +10,7 @@ images already in your local Docker, which is why every app sets `imagePullPolic
 | File | Compose service(s) it replaces |
 |------|--------------------------------|
 | `postgres.yaml`       | `postgres` (a **StatefulSet** — its volume is managed via `volumeClaimTemplates`) |
-| `rabbitmq.yaml`       | `rabbitmq` |
+| `rabbitmq.yaml`       | `rabbitmq` (a **StatefulSet** with a persistent volume for durable queues/messages) |
 | `userservice.yaml`    | `userservice` |
 | `authservice.yaml`    | `authservice` |
 | `messageservice.yaml` | `messageservice` |
@@ -105,9 +105,9 @@ kubectl delete -f k8s/          # removes Deployments, StatefulSet, Services (PV
 kubectl delete configmap nginx-config client-html postgres-init   # the generated ConfigMaps
 ```
 
-**Wipe the database too** (clean slate):
+**Wipe persistent data too** (clean slate — Postgres tables *and* RabbitMQ queues/messages):
 ```sh
-kubectl delete pvc data-postgres-0
+kubectl delete pvc data-postgres-0 data-rabbitmq-0
 ```
 
 **Stop the port-forwards** when done:
