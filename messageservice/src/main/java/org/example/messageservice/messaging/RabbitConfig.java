@@ -29,6 +29,9 @@ public class RabbitConfig {
     RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, MessageConverter converter) {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(converter);
+        // Ask the broker to return unroutable messages (paired with publisher-returns) so
+        // the relay can detect them via CorrelationData#getReturned and retry/park them.
+        template.setMandatory(true);
         return template;
     }
 }

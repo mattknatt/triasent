@@ -1,6 +1,5 @@
 package org.example.messageservice.outbox;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageBuilder;
@@ -12,7 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -26,10 +26,13 @@ import java.util.concurrent.TimeUnit;
  * deduplicate). A row that keeps failing is retried up to {@code maxAttempts}, then
  * parked ({@code failedAt} set) so it stops blocking the pipeline — the producer-side
  * equivalent of a dead-letter queue.
+ *
+ * <p>The batch is loaded under a short transaction and the {@code PESSIMISTIC_WRITE}
+ * locks are released before any RabbitMQ I/O; outcomes are persisted in a second short
+ * transaction. This keeps DB locks and the pooled connection off the network path.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class OutboxRelay {
 
     private static final int BATCH_SIZE = 100;
@@ -38,17 +41,37 @@ public class OutboxRelay {
 
     private final OutboxRepository repository;
     private final RabbitTemplate rabbitTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     @Value("${app.outbox.max-attempts:5}")
     private int maxAttempts;
 
+    public OutboxRelay(OutboxRepository repository,
+                       RabbitTemplate rabbitTemplate,
+                       PlatformTransactionManager transactionManager) {
+        this.repository = repository;
+        this.rabbitTemplate = rabbitTemplate;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:1000}")
-    @Transactional
     public void flush() {
-        List<OutboxEvent> batch = repository.findUnpublishedBatch(PageRequest.of(0, BATCH_SIZE));
+        // 1) Short transaction: lock + load a batch, then commit so the PESSIMISTIC_WRITE
+        //    locks and the DB connection are released before we touch the network.
+        List<OutboxEvent> batch = transactionTemplate.execute(status ->
+                repository.findUnpublishedBatch(PageRequest.of(0, BATCH_SIZE)));
+        if (batch == null || batch.isEmpty()) {
+            return;
+        }
+
+        // 2) Publish each event outside any transaction and wait for the broker confirm.
+        //    The entities are detached here; publishOne only mutates their in-memory state.
         for (OutboxEvent event : batch) {
             publishOne(event);
         }
+
+        // 3) Separate short transaction: persist the published/failed outcomes.
+        transactionTemplate.executeWithoutResult(status -> repository.saveAll(batch));
     }
 
     private void publishOne(OutboxEvent event) {
@@ -59,11 +82,19 @@ public class OutboxRelay {
             CorrelationData.Confirm confirm =
                     correlation.getFuture().get(CONFIRM_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
-            if (confirm != null && confirm.isAck()) {
-                event.setPublishedAt(Instant.now()); // dirty-checked, flushed on commit
+            if (confirm == null) {
+                recordFailure(event, "confirm timeout");
+            } else if (!confirm.isAck()) {
+                recordFailure(event, "broker nack: " + confirm.getReason());
+            } else if (correlation.getReturned() != null) {
+                // Acked by the broker but matched no queue -> would otherwise be dropped.
+                recordFailure(event, "unroutable: " + correlation.getReturned().getReplyText());
             } else {
-                recordFailure(event, confirm == null ? "confirm timeout" : "broker nack: " + confirm.getReason());
+                event.setPublishedAt(Instant.now());
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            recordFailure(event, e.getMessage());
         } catch (Exception e) {
             recordFailure(event, e.getMessage());
         }
