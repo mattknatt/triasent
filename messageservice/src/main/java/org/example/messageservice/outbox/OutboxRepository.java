@@ -22,6 +22,6 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
-    @Query("select e from OutboxEvent e where e.publishedAt is null order by e.createdAt asc")
+    @Query("select e from OutboxEvent e where e.publishedAt is null and e.failedAt is null order by e.createdAt asc")
     List<OutboxEvent> findUnpublishedBatch(Pageable pageable);
 }

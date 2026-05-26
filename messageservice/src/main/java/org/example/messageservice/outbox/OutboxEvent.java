@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -41,6 +42,22 @@ public class OutboxEvent {
 
     /** Null until the relay has had the broker confirm receipt. */
     private Instant publishedAt;
+
+    /** Failed publish attempts so far. Once it hits the cap the row is parked. */
+    @ColumnDefault("0")
+    @Column(nullable = false)
+    private int attempts = 0;
+
+    /** Last failure reason, for diagnosing parked rows. */
+    @Column(columnDefinition = "text")
+    private String lastError;
+
+    /**
+     * Set when the relay gives up after {@code attempts} reaches the cap. A non-null
+     * value means this row is the producer-side "dead letter" — it will no longer be
+     * polled and needs manual inspection / replay.
+     */
+    private Instant failedAt;
 
     @PrePersist
     void onCreate() {
