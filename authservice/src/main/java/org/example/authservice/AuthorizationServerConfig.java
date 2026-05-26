@@ -52,7 +52,17 @@ public class AuthorizationServerConfig {
                         .build())
                 .build();
 
-        return new InMemoryRegisteredClientRepository(client);
+        // botservice authenticates with client_credentials; the access token's subject is
+        // the client id ("bot"), so messages it posts are authored by "bot".
+        RegisteredClient botClient = RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId("bot")
+                .clientSecret(passwordEncoder.encode("bot-secret"))
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .scope("message.write")
+                .build();
+
+        return new InMemoryRegisteredClientRepository(client, botClient);
     }
 
     @Bean

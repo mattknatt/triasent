@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: botservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: botservice
+  template:
+    metadata:
+      labels:
+        app: botservice
+    spec:
+      containers:
+        - name: botservice
+          image: botservice:0.0.1-SNAPSHOT
+          imagePullPolicy: Never        # locally built image
+          ports:
+            - containerPort: 8080
+          env:
+            # Relaxed-binding overrides for the ${...:default} placeholders in
+            # application.properties (RABBITMQ_HOST -> rabbitmq.host, etc.).
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: AUTHSERVICE_HOST
+              value: authservice          # token endpoint http://authservice:9000/oauth2/token
+            - name: MESSAGESERVICE_HOST
+              value: messageservice       # reply target http://messageservice:8081/messages
+            - name: ALLOWED_ORIGIN
+              value: "*"                  # CORS origin; bot isn't browser-facing, any value works
+          envFrom:
+            - secretRef:
+                name: llm-credentials     # LLM_API_URL / LLM_API_KEY / LLM_API_MODEL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: botservice
+spec:
+  selector:
+    app: botservice
+  ports:
+    - port: 8080
+      targetPort: 8080
