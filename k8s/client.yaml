@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client
+  template:
+    metadata:
+      labels:
+        app: client
+    spec:
+      containers:
+        - name: client
+          image: nginx:alpine           # public image -> downloaded
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config         # replaces the nginx.conf bind-mount in compose
+              mountPath: /etc/nginx/conf.d
+            - name: html                 # replaces the index.html bind-mount in compose
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config           # created by create-configmaps.sh from client/nginx.conf
+        - name: html
+          configMap:
+            name: client-html            # created by create-configmaps.sh from client/index.html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: client
+spec:
+  selector:
+    app: client
+  ports:
+    - port: 80
+      targetPort: 80

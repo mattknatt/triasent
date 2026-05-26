@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messageservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: messageservice
+  template:
+    metadata:
+      labels:
+        app: messageservice
+    spec:
+      containers:
+        - name: messageservice
+          image: messageservice:0.0.1-SNAPSHOT
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8081
+          env:
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: USERSERVICE_HOST
+              value: userservice
+            - name: AUTHSERVICE_HOST
+              value: authservice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: messageservice
+spec:
+  selector:
+    app: messageservice
+  ports:
+    - port: 8081
+      targetPort: 8081

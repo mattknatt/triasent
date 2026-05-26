@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authservice
+  template:
+    metadata:
+      labels:
+        app: authservice
+    spec:
+      containers:
+        - name: authservice
+          image: authservice:0.0.1-SNAPSHOT
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 9000
+          env:
+            - name: USERSERVICE_HOST
+              value: userservice
+            - name: AUTHSERVICE_HOST
+              value: authservice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authservice
+spec:
+  selector:
+    app: authservice
+  ports:
+    - port: 9000
+      targetPort: 9000
