@@ -8,11 +8,16 @@ package user;
 
 service UserService {
   rpc GetUserProfile (GetUserRequest) returns (UserProfile);
+  rpc GetUserByUsername (GetUserByUsernameRequest) returns (UserProfile);
   rpc VerifyCredentials (VerifyCredentialsRequest) returns (VerifyCredentialsResponse);
 }
 
 message GetUserRequest {
   string user_id = 1;
+}
+
+message GetUserByUsernameRequest {
+  string username = 1;
 }
 
 message UserProfile {
