@@ -23,6 +23,11 @@ spec:
             # application.properties (RABBITMQ_HOST -> rabbitmq.host, etc.).
             - name: RABBITMQ_HOST
               value: rabbitmq
+            - name: SPRING_RABBITMQ_PASSWORD  # rabbitmq 'app' password, from the chart's Secret
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq
+                  key: rabbitmq-password
             - name: AUTHSERVICE_HOST
               value: authservice          # token endpoint http://authservice:9000/oauth2/token
             - name: MESSAGESERVICE_HOST

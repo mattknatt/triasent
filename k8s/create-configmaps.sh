@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generates the 3 ConfigMaps that replace the bind-mounts from docker-compose.yml.
+# Generates the 2 ConfigMaps that replace the nginx bind-mounts from docker-compose.yml.
 # Run from anywhere; it resolves paths relative to the repo root.
 # Idempotent: re-run it after editing any of the source files to update the ConfigMap.
 set -euo pipefail
@@ -17,9 +17,4 @@ kubectl create configmap client-html \
   --from-file=index.html="$ROOT/client/index.html" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# DB bootstrap script -> mounted at /docker-entrypoint-initdb.d/init-db.sh in the postgres pod
-kubectl create configmap postgres-init \
-  --from-file=init-db.sh="$ROOT/docker/init-db.sh" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-echo "ConfigMaps applied: nginx-config, client-html, postgres-init"
+echo "ConfigMaps applied: nginx-config, client-html"

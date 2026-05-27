@@ -20,7 +20,12 @@ spec:
             - containerPort: 8083
           env:
             - name: POSTGRES_HOST
-              value: postgres
+              value: users-db                 # dedicated Bitnami Postgres for userservice
+            - name: SPRING_DATASOURCE_PASSWORD # users_app password, from the chart's Secret
+              valueFrom:
+                secretKeyRef:
+                  name: users-db
+                  key: password
 ---
 apiVersion: v1
 kind: Service
