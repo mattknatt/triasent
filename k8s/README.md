@@ -62,10 +62,18 @@ helm install rabbitmq bitnami/rabbitmq -n default \
 > If any Bitnami image 404s on pull (`not found`), it's the same catalog change — add
 > `--set image.repository=bitnamilegacy/<name> --set global.security.allowInsecureImages=true`.
 
-### 2. botservice LLM credentials Secret (from `botservice/.env`, values never printed)
+### 2. Application Secrets (values generated/sourced locally, never printed or committed)
 
 ```sh
+# botservice LLM credentials, from botservice/.env
 kubectl create secret generic llm-credentials --from-env-file=botservice/.env \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# OAuth client secrets, generated once and shared by the authorization server and its
+# clients (authservice encodes them; bff/botservice present them).
+kubectl create secret generic oauth-clients \
+  --from-literal=gateway-client-secret="$(openssl rand -hex 24)" \
+  --from-literal=bot-client-secret="$(openssl rand -hex 24)" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -92,9 +100,11 @@ kubectl apply -f k8s/gateway/httproute.yaml
 | `messages-db` (key `password`) | postgresql chart | `SPRING_DATASOURCE_PASSWORD` in messageservice |
 | `rabbitmq` (key `rabbitmq-password`) | rabbitmq chart | `SPRING_RABBITMQ_PASSWORD` in messageservice + botservice |
 | `llm-credentials` | you (step 2) | `LLM_API_*` env in botservice |
+| `oauth-clients` (keys `gateway-client-secret`, `bot-client-secret`) | you (step 2) | authservice encodes both (`GATEWAY_CLIENT_SECRET`/`BOT_CLIENT_SECRET`); bff + botservice present them as their `client-secret` |
 
-Apps connect as least-privilege users (`users_app`, `messages_app`, `app`) — no plaintext
-DB/RabbitMQ passwords exist in the repo. To read a generated password:
+Apps connect as least-privilege users (`users_app`, `messages_app`, `app`) — and **no
+plaintext credentials (DB, RabbitMQ, or OAuth client secrets) exist in the repo**. To read
+a generated value:
 ```sh
 kubectl get secret rabbitmq -o jsonpath='{.data.rabbitmq-password}' | base64 -d
 ```
@@ -116,10 +126,10 @@ Use port **8090** for login (the redirect URIs are configured for it). RabbitMQ 
 ## Teardown
 
 ```sh
-# Apps + ConfigMaps + your Secret
+# Apps + ConfigMaps + your Secrets
 kubectl delete -f k8s/
 kubectl delete configmap nginx-config client-html
-kubectl delete secret llm-credentials
+kubectl delete secret llm-credentials oauth-clients
 
 # Infrastructure (Helm) — this also removes the chart-generated Secrets
 helm uninstall users-db messages-db rabbitmq -n default
@@ -132,8 +142,9 @@ kubectl delete pvc data-users-db-0 data-messages-db-0 data-rabbitmq-0
 
 - **Pause without data loss:** quit Docker Desktop (workloads + data return on reopen), or
   `kubectl scale deployment --all --replicas=0` and `helm`-managed StatefulSets stay put.
-- **Still in code, not Secrets:** the OAuth *client* secrets in authservice
-  (`AuthorizationServerConfig`, e.g. the `bot` / `gateway-client` secrets) are app-level
-  config, a separate concern from the infra credentials handled here.
+- **All credentials are Secret-managed:** DB, RabbitMQ, LLM, and OAuth client secrets are
+  injected from Secrets — none are hardcoded in source or properties. authservice reads the
+  raw client secrets from `oauth-clients` and BCrypt-encodes them; bff/botservice present
+  the matching value from the same Secret.
 - **Health checks:** dependency ordering relies on app retries; add
   `readinessProbe`/`livenessProbe` later for cleaner startup.

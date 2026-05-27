@@ -34,6 +34,11 @@ spec:
               value: messageservice       # reply target http://messageservice:8081/messages
             - name: ALLOWED_ORIGIN
               value: "*"                  # CORS origin; bot isn't browser-facing, any value works
+            - name: SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_BOT_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: oauth-clients
+                  key: bot-client-secret
           envFrom:
             - secretRef:
                 name: llm-credentials     # LLM_API_URL / LLM_API_KEY / LLM_API_MODEL
