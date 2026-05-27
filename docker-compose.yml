@@ -89,7 +89,6 @@ services:
       AUTHSERVICE_HOST: authservice
       MESSAGESERVICE_HOST: messageservice
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_BOT_CLIENT_SECRET: ${BOT_CLIENT_SECRET}
-      ALLOWED_ORIGIN: "*"
     # consumer only — no published port needed
 
   client:

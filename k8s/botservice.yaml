@@ -32,8 +32,6 @@ spec:
               value: authservice          # token endpoint http://authservice:9000/oauth2/token
             - name: MESSAGESERVICE_HOST
               value: messageservice       # reply target http://messageservice:8081/messages
-            - name: ALLOWED_ORIGIN
-              value: "*"                  # CORS origin; bot isn't browser-facing, any value works
             - name: SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_BOT_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
