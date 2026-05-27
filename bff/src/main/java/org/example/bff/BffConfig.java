@@ -33,8 +33,10 @@ public class BffConfig {
                         .anyRequest().authenticated()
                 )
                 .csrf(csrf -> csrf.disable())
-                // Enable OAuth2 login (for browser users)
-                .oauth2Login(Customizer.withDefaults())
+                // OAuth2 login for browser users. Always return to the SPA root after login
+                // (ignore the saved pre-login request, e.g. the SPA's /api/messages auth probe,
+                // which would otherwise land the user on raw JSON).
+                .oauth2Login(oauth2 -> oauth2.defaultSuccessUrl("/", true))
                 // Enable OAuth2 client (needed for tokenRelay)
                 .oauth2Client(Customizer.withDefaults())
                 .build();
