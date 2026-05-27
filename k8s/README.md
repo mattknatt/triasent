@@ -1,139 +1,139 @@
 # Running Triasent on local Kubernetes
 
-These manifests are a translation of `docker-compose.yml` for a **local** Kubernetes
-cluster (Docker Desktop's built-in Kubernetes). Because the cluster runs on your own
-Mac, there's no registry and no cross-architecture build needed — Kubernetes uses the
-images already in your local Docker, which is why every app sets `imagePullPolicy: Never`.
+A local deployment for Docker Desktop's built-in Kubernetes. Because the cluster runs on
+your Mac, there's no registry: the app images live in your local Docker and every app
+Deployment uses `imagePullPolicy: Never`.
 
-## What's here
+## Architecture
 
-| File | Compose service(s) it replaces |
-|------|--------------------------------|
-| `postgres.yaml`       | `postgres` (a **StatefulSet** — its volume is managed via `volumeClaimTemplates`) |
-| `rabbitmq.yaml`       | `rabbitmq` (a **StatefulSet** with a persistent volume for durable queues/messages) |
-| `userservice.yaml`    | `userservice` |
-| `authservice.yaml`    | `authservice` |
-| `messageservice.yaml` | `messageservice` |
-| `bff.yaml`            | `bff` |
-| `client.yaml`         | `client` (nginx) |
-| `botservice.yaml`     | `botservice` — LLM bot that consumes `message.published` and replies (**new**, no compose equivalent) |
-| `create-configmaps.sh`| the three bind-mounted files (see below) |
+- **App services** (built locally with Spring Boot buildpacks): `userservice`,
+  `authservice`, `messageservice`, `bff`, `botservice`, plus an nginx `client`.
+- **Stateful infrastructure** (installed with Helm, *not* in `k8s/`):
+  - **PostgreSQL × 2** — database-per-service via the Bitnami chart: `users-db`
+    (`users_db`) for userservice, `messages-db` (`messages_db`) for messageservice.
+  - **RabbitMQ** — Bitnami chart, used by messageservice (outbox relay) and botservice.
+- **Credentials live in Kubernetes Secrets**, never in the repo. The Bitnami charts
+  generate the DB/RabbitMQ passwords into Secrets; the apps read them via `secretKeyRef`.
 
-`botservice` needs LLM API credentials, supplied via a Kubernetes **Secret** (`llm-credentials`)
-rather than a ConfigMap — see Prerequisites and Deploy below.
+## What's in `k8s/`
 
-Each file has a workload (**Deployment** = "run the container", or a **StatefulSet** for
-Postgres since it owns persistent data) plus a **Service** ("give it a stable name other
-pods reach it by"). The Service names match the `*_HOST` env vars, so the apps find each
-other exactly like they did in compose. `depends_on` is dropped — Kubernetes starts
-everything and the apps retry until their dependencies are up.
+| Path | Contents |
+|------|----------|
+| `userservice.yaml` `authservice.yaml` `messageservice.yaml` `bff.yaml` `botservice.yaml` | app Deployment + Service each |
+| `client.yaml` | nginx Deployment + Service (mounts the two ConfigMaps below) |
+| `create-configmaps.sh` | generates the `nginx-config` + `client-html` ConfigMaps from `client/` |
+| `gateway/httproute.yaml` | (optional) Traefik Gateway API route exposing the app at `http://localhost` |
 
-The three files that compose bind-mounted become **ConfigMaps**, generated from the real
-files by `create-configmaps.sh` (single source of truth):
-`client/nginx.conf`, `client/index.html`, `docker/init-db.sh`.
+Postgres and RabbitMQ are **not** here — they're Helm releases (see Deploy). `depends_on`
+is dropped; apps retry until their dependencies are up. Service names match the `*_HOST`
+env vars, and `fullnameOverride` keeps the chart Service names (`rabbitmq`) stable.
 
 ## Prerequisites
 
-1. **Enable Kubernetes** in Docker Desktop → Settings → Kubernetes → *Enable Kubernetes*.
-2. **Build the app images locally** so they exist in your Docker. Each module is its own
-   Maven build, so build them from their own directories (no aggregator pom):
+1. **Enable Kubernetes** in Docker Desktop → Settings → Kubernetes.
+2. **Add the Bitnami Helm repo:**
+   ```sh
+   helm repo add bitnami https://charts.bitnami.com/bitnami && helm repo update
+   ```
+3. **Build the five app images** (each module is its own Maven build — no aggregator pom):
    ```sh
    for m in userservice authservice messageservice bff botservice; do (cd "$m" && mvn spring-boot:build-image -DskipTests); done
    ```
-   Confirm: `docker images | grep 0.0.1-SNAPSHOT` lists all five.
-   (Postgres, RabbitMQ, and nginx are public images — Kubernetes downloads those.)
-3. **Provide botservice's LLM credentials** as a Secret, sourced from `botservice/.env`
-   (`LLM_API_URL`, `LLM_API_KEY`, `LLM_API_MODEL`). Piped through `apply` so the values
-   are never printed:
-   ```sh
-   kubectl create secret generic llm-credentials --from-env-file=botservice/.env \
-     --dry-run=client -o yaml | kubectl apply -f -
-   ```
+   Confirm: `docker images | grep 0.0.1-SNAPSHOT` lists all five. (nginx is a public image.)
 
 ## Deploy
 
-```sh
-bash k8s/create-configmaps.sh   # create/refresh the 3 ConfigMaps
-# create the llm-credentials Secret too (see Prerequisites step 3) if not done already
-kubectl apply -f k8s/           # create everything else
-kubectl get pods                # watch until all are Running
-```
-
-> botservice will keep restarting/erroring until the `llm-credentials` Secret exists, so
-> create that Secret before (or right after) `kubectl apply -f k8s/`.
-
-## Access it from your Mac
-
-Unlike compose, ports aren't published to your machine automatically. Login needs **two**
-forwards running at once (each blocks its terminal, so use two terminals or append `&`):
+### 1. Infrastructure (Helm) — creates the Secrets the apps consume
 
 ```sh
-kubectl port-forward service/client      8090:80     # the app itself
-kubectl port-forward service/authservice 9000:9000   # REQUIRED for OAuth login (see below)
+# Two Postgres instances. Passwords are auto-generated into Secrets (users-db / messages-db).
+helm install users-db bitnami/postgresql -n default \
+  --set fullnameOverride=users-db --set auth.username=users_app --set auth.database=users_db
+helm install messages-db bitnami/postgresql -n default \
+  --set fullnameOverride=messages-db --set auth.username=messages_app --set auth.database=messages_db
+
+# RabbitMQ. NOTE: since Bitnami's Aug-2025 catalog change, the pinned rabbitmq image tag
+# was moved to the `bitnamilegacy` repo, so point the image there.
+helm install rabbitmq bitnami/rabbitmq -n default \
+  --set fullnameOverride=rabbitmq --set auth.username=app \
+  --set image.repository=bitnamilegacy/rabbitmq \
+  --set global.security.allowInsecureImages=true
 ```
+> If any Bitnami image 404s on pull (`not found`), it's the same catalog change — add
+> `--set image.repository=bitnamilegacy/<name> --set global.security.allowInsecureImages=true`.
 
-Then open **http://localhost:8090**. Use port **8090** specifically — the OAuth redirect
-URIs and the `X-Forwarded-Port 8090` header in `client/nginx.conf` are configured for it.
-Complete the login + post-message flow just like in the compose setup.
+### 2. botservice LLM credentials Secret (from `botservice/.env`, values never printed)
 
-### Why authservice must be forwarded too
-
-The OAuth issuer is `http://authservice:9000` (see `bff` and `authservice`
-`application.properties`), and you have `127.0.0.1 authservice` in `/etc/hosts`. During
-login the BFF redirects your **browser** to `http://authservice:9000/oauth2/authorize…`,
-so the browser — not just the cluster — must be able to reach authservice on 9000.
-Compose published `9000:9000` automatically; in Kubernetes you forward it yourself.
-Without this forward, login fails with connection-refused after the first redirect.
-
-Optional — RabbitMQ management UI:
 ```sh
-kubectl port-forward service/rabbitmq 15672:15672   # then http://localhost:15672
+kubectl create secret generic llm-credentials --from-env-file=botservice/.env \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-## Updating config
+### 3. App ConfigMaps + manifests
 
-If you edit `client/nginx.conf`, `client/index.html`, or `docker/init-db.sh`, re-run
-`bash k8s/create-configmaps.sh` and restart the affected pod
-(`kubectl rollout restart deployment/client`). The Postgres init script only runs on a
-**fresh** data volume, so changes to it require deleting the PVC `data-postgres-0` and
-restarting Postgres (`kubectl rollout restart statefulset/postgres`).
-
-## Pausing vs. tearing down
-
-Everything here is declarative, so the cluster is disposable — recreate it any time with
-`kubectl apply -f k8s/`. Pick based on whether you want to **keep the Postgres data**.
-
-> ℹ️ The Postgres PVC (`data-postgres-0`) is created by the StatefulSet's
-> `volumeClaimTemplates`, **not** by a file in `k8s/`. So `kubectl delete -f k8s/` does
-> **not** delete it — your data survives a teardown. To actually wipe the DB you must
-> delete the PVC explicitly (the default `hostpath` StorageClass reclaims it on delete).
-
-**Pause and keep data** (e.g. coming back to it later):
 ```sh
-# easiest: just quit Docker Desktop — workloads and data return on reopen.
-# or, keep the cluster up but stop the pods:
-kubectl scale deployment,statefulset --all --replicas=0   # resume with --replicas=1
+bash k8s/create-configmaps.sh        # nginx-config + client-html
+kubectl apply -f k8s/                # all app Deployments/Services (non-recursive: skips gateway/)
+kubectl get pods                     # wait until everything is Running
 ```
 
-**Tear down workloads, keep data** (re-`apply` later and the DB is still there):
+### 4. (Optional) Expose the app via Traefik
+
+If Traefik (with the Gateway API) is installed, route the app to `http://localhost`:
 ```sh
-kubectl delete -f k8s/          # removes Deployments, StatefulSet, Services (PVC stays)
-kubectl delete configmap nginx-config client-html postgres-init   # the generated ConfigMaps
+kubectl apply -f k8s/gateway/httproute.yaml
 ```
 
-**Wipe persistent data too** (clean slate — Postgres tables *and* RabbitMQ queues/messages):
+## Credentials / Secrets
+
+| Secret | Created by | Consumed as |
+|--------|-----------|-------------|
+| `users-db` (key `password`) | postgresql chart | `SPRING_DATASOURCE_PASSWORD` in userservice |
+| `messages-db` (key `password`) | postgresql chart | `SPRING_DATASOURCE_PASSWORD` in messageservice |
+| `rabbitmq` (key `rabbitmq-password`) | rabbitmq chart | `SPRING_RABBITMQ_PASSWORD` in messageservice + botservice |
+| `llm-credentials` | you (step 2) | `LLM_API_*` env in botservice |
+
+Apps connect as least-privilege users (`users_app`, `messages_app`, `app`) — no plaintext
+DB/RabbitMQ passwords exist in the repo. To read a generated password:
 ```sh
-kubectl delete pvc data-postgres-0 data-rabbitmq-0
+kubectl get secret rabbitmq -o jsonpath='{.data.rabbitmq-password}' | base64 -d
 ```
 
-**Stop the port-forwards** when done:
+## Access from your Mac
+
+The app is reachable two ways:
+- **Via Traefik** (if installed): `http://localhost` directly.
+- **Via port-forward:** `kubectl port-forward service/client 8090:80`.
+
+**OAuth login** additionally needs the browser to reach authservice, using the
+`127.0.0.1 authservice` entry in `/etc/hosts` plus:
 ```sh
-pkill -f "kubectl port-forward"
+kubectl port-forward service/authservice 9000:9000
+```
+Use port **8090** for login (the redirect URIs are configured for it). RabbitMQ UI:
+`kubectl port-forward service/rabbitmq 15672:15672` (user `app`, password from the Secret).
+
+## Teardown
+
+```sh
+# Apps + ConfigMaps + your Secret
+kubectl delete -f k8s/
+kubectl delete configmap nginx-config client-html
+kubectl delete secret llm-credentials
+
+# Infrastructure (Helm) — this also removes the chart-generated Secrets
+helm uninstall users-db messages-db rabbitmq -n default
+
+# Wipe persistent data (StatefulSet PVCs are NOT deleted by helm uninstall)
+kubectl delete pvc data-users-db-0 data-messages-db-0 data-rabbitmq-0
 ```
 
-## Notes / possible next steps
+## Notes
 
-- **Credentials**: Postgres user/password are plaintext env here to mirror compose. For
-  anything beyond local play, move them into a Kubernetes `Secret`.
-- **Health checks**: dependency ordering currently relies on app retries. You can add
-  `readinessProbe`/`livenessProbe` to each Deployment later for cleaner startup behavior.
+- **Pause without data loss:** quit Docker Desktop (workloads + data return on reopen), or
+  `kubectl scale deployment --all --replicas=0` and `helm`-managed StatefulSets stay put.
+- **Still in code, not Secrets:** the OAuth *client* secrets in authservice
+  (`AuthorizationServerConfig`, e.g. the `bot` / `gateway-client` secrets) are app-level
+  config, a separate concern from the infra credentials handled here.
+- **Health checks:** dependency ordering relies on app retries; add
+  `readinessProbe`/`livenessProbe` later for cleaner startup.

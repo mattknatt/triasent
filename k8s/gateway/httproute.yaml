@@ -1,0 +1,22 @@
+# Route everything to the nginx `client`, which keeps doing its own internal routing
+# (static SPA at /, and proxying /api, /oauth2, /login to bff). This is the minimal
+# setup: it replaces `kubectl port-forward service/client 8090:80` with a stable
+# gateway entry at the Traefik address (http://localhost on Docker Desktop).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: client
+  namespace: default              # same namespace as the `client` Service it routes to
+spec:
+  parentRefs:
+    - name: traefik-gateway       # the Gateway the Traefik chart created (kubectl get gateway -n traefik)
+      namespace: traefik
+      sectionName: web
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: client
+          port: 80

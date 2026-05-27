@@ -20,9 +20,19 @@ spec:
             - containerPort: 8081
           env:
             - name: POSTGRES_HOST
-              value: postgres
+              value: messages-db              # dedicated Bitnami Postgres for messageservice
+            - name: SPRING_DATASOURCE_PASSWORD # messages_app password, from the chart's Secret
+              valueFrom:
+                secretKeyRef:
+                  name: messages-db
+                  key: password
             - name: RABBITMQ_HOST
               value: rabbitmq
+            - name: SPRING_RABBITMQ_PASSWORD   # rabbitmq 'app' password, from the chart's Secret
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq
+                  key: rabbitmq-password
             - name: USERSERVICE_HOST
               value: userservice
             - name: AUTHSERVICE_HOST
