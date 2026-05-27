@@ -22,11 +22,16 @@ public class ProcessedEventStore {
             .expireAfterWrite(Duration.ofHours(1))
             .build();
 
-    public boolean alreadyProcessed(UUID id) {
-        return seen.getIfPresent(id) != null;
+    /**
+     * Atomically claims an event id. Returns {@code true} only if it wasn't already
+     * present, so a duplicate or concurrent delivery can't both pass the check.
+     */
+    public boolean tryMarkProcessing(UUID id) {
+        return seen.asMap().putIfAbsent(id, Boolean.TRUE) == null;
     }
 
-    public void markProcessed(UUID id) {
-        seen.put(id, Boolean.TRUE);
+    /** Releases a claim so a failed delivery can be retried instead of skipped. */
+    public void release(UUID id) {
+        seen.asMap().remove(id);
     }
 }

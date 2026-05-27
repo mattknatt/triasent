@@ -35,8 +35,11 @@ public class ChatService {
         messages.add(new Message("user", request.message()));
 
         String reply = llmClient.sendMessages(messages);
-        conversationMemory.append(sessionId, new Message("user", request.message()));
-        conversationMemory.append(sessionId, new Message("assistant", reply));
+        // Save both messages of the turn atomically so concurrent same-session requests
+        // can't interleave and break user/assistant ordering.
+        conversationMemory.appendTurn(sessionId,
+                new Message("user", request.message()),
+                new Message("assistant", reply));
         return new ChatResponse(reply, sessionId);
     }
 }

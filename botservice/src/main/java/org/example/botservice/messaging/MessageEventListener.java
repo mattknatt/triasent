@@ -35,26 +35,30 @@ public class MessageEventListener {
             return;
         }
 
-        // Idempotency: a redelivered event must not trigger a second LLM call / reply.
-        if (processedEvents.alreadyProcessed(event.id())) {
-            log.debug("Skipping already-processed event {}", event.id());
+        // Idempotency: atomically claim the event id. A duplicate or concurrent delivery
+        // that can't claim it is skipped. (Server-side idempotency is the durable backstop
+        // across restarts; this just avoids redundant LLM calls.)
+        if (!processedEvents.tryMarkProcessing(event.id())) {
+            log.debug("Skipping already-claimed event {}", event.id());
             return;
         }
 
-        log.info("Received message.published from '{}': {}", event.username(), event.content());
+        try {
+            log.info("Received message.published from '{}': {}", event.username(), event.content());
 
-        // sessionId = username gives each user a continuous conversation in ConversationMemory.
-        ChatRequest request = new ChatRequest(PERSONALITY, event.content(), event.username());
-        ChatResponse response = chatService.chat(request);
+            // sessionId = username gives each user a continuous conversation in ConversationMemory.
+            ChatRequest request = new ChatRequest(PERSONALITY, event.content(), event.username());
+            ChatResponse response = chatService.chat(request);
 
-        log.info("Bot reply for '{}' (session {}): {}",
-                event.username(), response.sessionId(), response.response());
+            log.info("Bot reply for '{}' (session {}): {}",
+                    event.username(), response.sessionId(), response.response());
 
-        // Post the reply back as "bot"; it gets persisted + re-published, and the
-        // loop-prevention check above stops the bot from answering its own message.
-        botReplyClient.postReply(response.response());
-
-        // Mark only after success: a failure leaves the event unmarked so it is retried.
-        processedEvents.markProcessed(event.id());
+            // Post the reply back as "bot"; the source event id is the idempotency key.
+            botReplyClient.postReply(response.response(), event.id().toString());
+        } catch (RuntimeException e) {
+            // Failed -> release the claim so the redelivery is retried instead of skipped.
+            processedEvents.release(event.id());
+            throw e;
+        }
     }
 }

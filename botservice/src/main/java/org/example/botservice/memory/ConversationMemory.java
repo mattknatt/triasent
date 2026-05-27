@@ -26,10 +26,20 @@ public class ConversationMemory {
     }
 
     public void append(String sessionId, Message message) {
-        if (sessionId == null) return;
+        appendTurn(sessionId, message);
+    }
+
+    /**
+     * Appends all messages of a turn in one atomic update, so concurrent requests for the
+     * same session can't interleave and break user/assistant ordering.
+     */
+    public void appendTurn(String sessionId, Message... messages) {
+        if (sessionId == null || messages.length == 0) return;
         cache.asMap().compute(sessionId, (k, existing) -> {
             List<Message> history = existing != null ? new ArrayList<>(existing) : new ArrayList<>();
-            history.add(message);
+            for (Message message : messages) {
+                history.add(message);
+            }
             if (history.size() > MAX_HISTORY) {
                 return new ArrayList<>(history.subList(history.size() - MAX_HISTORY, history.size()));
             }
