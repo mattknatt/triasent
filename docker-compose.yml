@@ -1,80 +1,105 @@
+# Local-dev alternative to the Kubernetes setup. Mirrors that architecture:
+# database-per-service, RabbitMQ user "app", and all credentials injected from a gitignored
+# .env (see .env.example) instead of being hardcoded — same "no plaintext secrets" goal.
+#
+# Build the app images first (mvn spring-boot:build-image per module), create .env, then:
+#   docker compose up -d
+# App at http://localhost:8090 . For OAuth login you also need `127.0.0.1 authservice` in
+# /etc/hosts (the issuer is http://authservice:9000, published below).
 services:
-  postgres:
+  # --- databases (one per service, like the Bitnami instances in k8s) ---
+  users-db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: root
+      POSTGRES_USER: users_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: users_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-      - postgres_data:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    volumes: ["users_db_data:/var/lib/postgresql/data"]
+
+  messages-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: messages_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: messages_db
+    ports: ["5433:5432"]
+    volumes: ["messages_db_data:/var/lib/postgresql/data"]
 
   rabbitmq:
     image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: app
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports: ["5672:5672", "15672:15672"]
 
+  # --- app services ---
   userservice:
     image: userservice:0.0.1-SNAPSHOT
-    depends_on:
-      - postgres
+    depends_on: [users-db]
+    restart: on-failure
     environment:
-      POSTGRES_HOST: postgres
-    ports:
-      - "8083:8083"
+      POSTGRES_HOST: users-db
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+    ports: ["8083:8083"]
 
   authservice:
     image: authservice:0.0.1-SNAPSHOT
-    depends_on:
-      - userservice
+    depends_on: [userservice]
     restart: on-failure
     environment:
       USERSERVICE_HOST: userservice
       AUTHSERVICE_HOST: authservice
-    ports:
-      - "9000:9000"
+      GATEWAY_CLIENT_SECRET: ${GATEWAY_CLIENT_SECRET}
+      BOT_CLIENT_SECRET: ${BOT_CLIENT_SECRET}
+    ports: ["9000:9000"]
 
   messageservice:
     image: messageservice:0.0.1-SNAPSHOT
-    depends_on:
-      - postgres
-      - rabbitmq
-      - userservice
-      - authservice
+    depends_on: [messages-db, rabbitmq, userservice, authservice]
     restart: on-failure
     environment:
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: messages-db
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       USERSERVICE_HOST: userservice
       AUTHSERVICE_HOST: authservice
-    ports:
-      - "8081:8081"
+    ports: ["8081:8081"]
 
   bff:
     image: bff:0.0.1-SNAPSHOT
-    depends_on:
-      - authservice
-      - messageservice
+    depends_on: [authservice, messageservice]
     restart: on-failure
     environment:
       AUTHSERVICE_HOST: authservice
       MESSAGESERVICE_HOST: messageservice
       USERSERVICE_HOST: userservice
-    ports:
-      - "8080:8080"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHSERVICE_CLIENT_SECRET: ${GATEWAY_CLIENT_SECRET}
+    ports: ["8080:8080"]
+
+  botservice:
+    image: botservice:0.0.1-SNAPSHOT
+    depends_on: [rabbitmq, authservice, messageservice]
+    restart: on-failure
+    env_file: ./botservice/.env        # LLM_API_URL / LLM_API_KEY / LLM_API_MODEL
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      AUTHSERVICE_HOST: authservice
+      MESSAGESERVICE_HOST: messageservice
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_BOT_CLIENT_SECRET: ${BOT_CLIENT_SECRET}
+      ALLOWED_ORIGIN: "*"
+    # consumer only — no published port needed
 
   client:
     image: nginx:alpine
-    depends_on:
-      - bff
+    depends_on: [bff]
     volumes:
       - ./client/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./client/index.html:/usr/share/nginx/html/index.html:ro
-    ports:
-      - "8090:80"
+    ports: ["8090:80"]
 
 volumes:
-  postgres_data:
+  users_db_data:
+  messages_db_data:
