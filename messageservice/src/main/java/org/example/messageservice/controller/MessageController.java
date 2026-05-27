@@ -19,8 +19,10 @@ public class MessageController {
     public record CreateMessageRequest(String content) {}
 
     @PostMapping
-    public MessageEntity create(@AuthenticationPrincipal Jwt jwt, @RequestBody CreateMessageRequest body) {
-        return service.post(jwt.getSubject(), body.content());
+    public MessageEntity create(@AuthenticationPrincipal Jwt jwt,
+                                @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                @RequestBody CreateMessageRequest body) {
+        return service.post(jwt.getSubject(), body.content(), idempotencyKey);
     }
 
     @GetMapping

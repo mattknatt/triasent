@@ -28,6 +28,14 @@ public class MessageEntity {
     @Column(nullable = false)
     private Instant createdAt;
 
+    /**
+     * Optional caller-supplied idempotency token (unique). A repeated create with the same
+     * key returns the existing message, so retried/redelivered posts don't duplicate.
+     * Null for clients that don't send one (e.g. human users).
+     */
+    @Column(name = "idempotency_key", unique = true)
+    private String idempotencyKey;
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) {

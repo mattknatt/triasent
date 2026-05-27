@@ -16,7 +16,11 @@ images already in your local Docker, which is why every app sets `imagePullPolic
 | `messageservice.yaml` | `messageservice` |
 | `bff.yaml`            | `bff` |
 | `client.yaml`         | `client` (nginx) |
+| `botservice.yaml`     | `botservice` — LLM bot that consumes `message.published` and replies (**new**, no compose equivalent) |
 | `create-configmaps.sh`| the three bind-mounted files (see below) |
+
+`botservice` needs LLM API credentials, supplied via a Kubernetes **Secret** (`llm-credentials`)
+rather than a ConfigMap — see Prerequisites and Deploy below.
 
 Each file has a workload (**Deployment** = "run the container", or a **StatefulSet** for
 Postgres since it owns persistent data) plus a **Service** ("give it a stable name other
@@ -31,20 +35,32 @@ files by `create-configmaps.sh` (single source of truth):
 ## Prerequisites
 
 1. **Enable Kubernetes** in Docker Desktop → Settings → Kubernetes → *Enable Kubernetes*.
-2. **Build the app images locally** so they exist in your Docker:
+2. **Build the app images locally** so they exist in your Docker. Each module is its own
+   Maven build, so build them from their own directories (no aggregator pom):
    ```sh
-   mvn -pl userservice,authservice,messageservice,bff spring-boot:build-image
+   for m in userservice authservice messageservice bff botservice; do (cd "$m" && mvn spring-boot:build-image -DskipTests); done
    ```
-   Confirm: `docker images | grep 0.0.1-SNAPSHOT` lists all four.
+   Confirm: `docker images | grep 0.0.1-SNAPSHOT` lists all five.
    (Postgres, RabbitMQ, and nginx are public images — Kubernetes downloads those.)
+3. **Provide botservice's LLM credentials** as a Secret, sourced from `botservice/.env`
+   (`LLM_API_URL`, `LLM_API_KEY`, `LLM_API_MODEL`). Piped through `apply` so the values
+   are never printed:
+   ```sh
+   kubectl create secret generic llm-credentials --from-env-file=botservice/.env \
+     --dry-run=client -o yaml | kubectl apply -f -
+   ```
 
 ## Deploy
 
 ```sh
 bash k8s/create-configmaps.sh   # create/refresh the 3 ConfigMaps
+# create the llm-credentials Secret too (see Prerequisites step 3) if not done already
 kubectl apply -f k8s/           # create everything else
 kubectl get pods                # watch until all are Running
 ```
+
+> botservice will keep restarting/erroring until the `llm-credentials` Secret exists, so
+> create that Secret before (or right after) `kubectl apply -f k8s/`.
 
 ## Access it from your Mac
 
