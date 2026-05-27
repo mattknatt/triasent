@@ -25,6 +25,11 @@ spec:
               value: messageservice
             - name: USERSERVICE_HOST
               value: userservice
+            - name: SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHSERVICE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: oauth-clients
+                  key: gateway-client-secret
 ---
 apiVersion: v1
 kind: Service

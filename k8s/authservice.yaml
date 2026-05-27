@@ -23,6 +23,16 @@ spec:
               value: userservice
             - name: AUTHSERVICE_HOST
               value: authservice
+            - name: GATEWAY_CLIENT_SECRET     # gateway-client raw secret, from oauth-clients Secret
+              valueFrom:
+                secretKeyRef:
+                  name: oauth-clients
+                  key: gateway-client-secret
+            - name: BOT_CLIENT_SECRET         # bot client raw secret, from oauth-clients Secret
+              valueFrom:
+                secretKeyRef:
+                  name: oauth-clients
+                  key: bot-client-secret
 ---
 apiVersion: v1
 kind: Service

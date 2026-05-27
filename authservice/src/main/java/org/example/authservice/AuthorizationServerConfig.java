@@ -33,11 +33,18 @@ public class AuthorizationServerConfig {
     @Value("${auth.issuer-uri:http://127.0.0.1:9000}")
     private String issuerUri;
 
+    // Raw client secrets injected from the oauth-clients Secret (env); encoded below.
+    @Value("${oauth.gateway-client.secret}")
+    private String gatewayClientSecret;
+
+    @Value("${oauth.bot-client.secret}")
+    private String botClientSecret;
+
     @Bean
     public RegisteredClientRepository registeredClientRepository(PasswordEncoder passwordEncoder) {
         RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("gateway-client")
-                .clientSecret(passwordEncoder.encode("secret"))
+                .clientSecret(passwordEncoder.encode(gatewayClientSecret))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
@@ -56,7 +63,7 @@ public class AuthorizationServerConfig {
         // the client id ("bot"), so messages it posts are authored by "bot".
         RegisteredClient botClient = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("bot")
-                .clientSecret(passwordEncoder.encode("bot-secret"))
+                .clientSecret(passwordEncoder.encode(botClientSecret))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .scope("message.write")
