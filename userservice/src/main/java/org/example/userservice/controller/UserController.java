@@ -3,6 +3,7 @@ package org.example.userservice.controller;
 import lombok.RequiredArgsConstructor;
 import org.example.userservice.model.UserEntity;
 import org.example.userservice.service.UserService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,6 +28,17 @@ public class UserController {
     @GetMapping("/users")
     public List<UserEntity> getAllUsers() {
         return userService.getAllUsers();
+    }
+
+    @PutMapping("/users/{id}")
+    public ResponseEntity<UserEntity> updateUser(@PathVariable UUID id, @RequestBody UserEntity changes) {
+        UserEntity updated = userService.updateUser(id, changes);
+        return updated == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(updated);
+    }
+
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
+        return userService.deleteUser(id) ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 
 }
