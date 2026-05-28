@@ -27,11 +27,12 @@ public class BotReplyClient {
         this.authorizedClientManager = authorizedClientManager;
     }
 
-    public void postReply(String content, String idempotencyKey) {
+    public void postReply(String content, String conversationOwner, String idempotencyKey) {
         restClient.post()
                 .uri("/messages")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken())
                 .header("Idempotency-Key", idempotencyKey)
+                .header("X-Conversation-Owner", conversationOwner)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new CreateMessageRequest(content))
                 .retrieve()

@@ -2,7 +2,7 @@ package org.example.botservice.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.botservice.client.LlmClient;
-import org.example.botservice.memory.ConversationMemory;
+import org.example.botservice.messaging.MessageHistoryClient;
 import org.example.botservice.model.ChatRequest;
 import org.example.botservice.model.ChatResponse;
 import org.example.botservice.model.Message;
@@ -18,7 +18,7 @@ import java.util.UUID;
 public class ChatService {
 
     private final PersonalityMapper personalityMapper;
-    private final ConversationMemory conversationMemory;
+    private final MessageHistoryClient historyClient;
     private final LlmClient llmClient;
 
     public ChatResponse chat(ChatRequest request) {
@@ -27,19 +27,21 @@ public class ChatService {
                 : request.sessionId();
 
         String systemPrompt = personalityMapper.getPrompt(request.personality());
-        List<Message> history = conversationMemory.getHistory(sessionId);
+        // History from messageservice already includes the user message we're responding to
+        // (messageservice persists the row before publishing the event), so we don't append
+        // request.message() again. The empty-history branch is the fallback for the very
+        // first turn or if the read fails: we still want the LLM to see something.
+        List<Message> history = historyClient.fetchHistory(sessionId);
 
         List<Message> messages = new ArrayList<>();
         messages.add(new Message("system", systemPrompt));
-        messages.addAll(history);
-        messages.add(new Message("user", request.message()));
+        if (history.isEmpty()) {
+            messages.add(new Message("user", request.message()));
+        } else {
+            messages.addAll(history);
+        }
 
         String reply = llmClient.sendMessages(messages);
-        // Save both messages of the turn atomically so concurrent same-session requests
-        // can't interleave and break user/assistant ordering.
-        conversationMemory.appendTurn(sessionId,
-                new Message("user", request.message()),
-                new Message("assistant", reply));
         return new ChatResponse(reply, sessionId);
     }
 }

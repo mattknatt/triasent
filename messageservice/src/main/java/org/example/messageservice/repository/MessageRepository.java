@@ -12,5 +12,6 @@ import java.util.UUID;
 public interface MessageRepository extends JpaRepository<MessageEntity, UUID> {
     List<MessageEntity> findAllByOrderByCreatedAtDesc();
     List<MessageEntity> findAllByUsernameOrderByCreatedAtDesc(String username);
+    List<MessageEntity> findAllByOwnerUsernameOrderByCreatedAtDesc(String ownerUsername);
     Optional<MessageEntity> findByIdempotencyKey(String idempotencyKey);
 }

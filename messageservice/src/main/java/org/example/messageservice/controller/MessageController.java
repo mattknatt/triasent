@@ -25,16 +25,34 @@ public class MessageController {
 
     public record CreateMessageRequest(String content) {}
 
+    private static final String BOT_SUBJECT = "bot";
+
     @PostMapping
     public MessageEntity create(@AuthenticationPrincipal Jwt jwt,
                                 @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                @RequestHeader(value = "X-Conversation-Owner", required = false) String conversationOwner,
                                 @RequestBody CreateMessageRequest body) {
-        return service.post(jwt.getSubject(), body.content(), idempotencyKey);
+        String author = jwt.getSubject();
+        // Only the bot (client_credentials token, subject = "bot") may attribute a message
+        // to another user's conversation. Human posts always own their own thread, so the
+        // header is ignored for them — prevents one user from planting messages in another.
+        String owner = BOT_SUBJECT.equals(author) && conversationOwner != null
+                ? conversationOwner
+                : author;
+        return service.post(author, owner, body.content(), idempotencyKey);
     }
 
     @GetMapping
-    public List<MessageResponse> list() {
-        List<MessageEntity> messages = service.all();
+    public List<MessageResponse> list(@AuthenticationPrincipal Jwt jwt,
+                                      @RequestParam(value = "ownerUsername", required = false) String ownerUsernameParam) {
+        String caller = jwt.getSubject();
+        // Mirror of the POST rule: only the bot may read someone else's thread (it needs
+        // the user's full transcript to build LLM context). Human users are pinned to
+        // their own conversation regardless of what the query param says.
+        String owner = BOT_SUBJECT.equals(caller) && ownerUsernameParam != null
+                ? ownerUsernameParam
+                : caller;
+        List<MessageEntity> messages = service.forOwner(owner);
 
         // Enrich each message with its author's role, fetched from userservice over gRPC.
         Set<String> authors = messages.stream()
