@@ -50,6 +50,8 @@ public class AuthorizationServerConfig {
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                 .redirectUri("http://localhost:8080/login/oauth2/code/authservice")
                 .redirectUri("http://localhost:8090/login/oauth2/code/authservice")
+                .postLogoutRedirectUri("http://localhost:8080/")
+                .postLogoutRedirectUri("http://localhost:8090/")
                 .scopes(scopes -> scopes.addAll(
                         Set.of("user.read", "user.write",
                                 OidcScopes.OPENID,

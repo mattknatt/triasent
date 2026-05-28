@@ -119,10 +119,7 @@
 
     // ---- auth actions ----
     function login() { window.location.href = '/oauth2/authorization/authservice'; }
-    async function logout() {
-        await fetch('/logout', { method: 'POST', redirect: 'manual' });
-        window.location.href = '/';
-    }
+    function logout() { window.location.href = '/logout'; }
     async function createAccount() {
         const hint = document.getElementById('createHint');
         const body = {
