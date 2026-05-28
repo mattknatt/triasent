@@ -96,13 +96,16 @@
 <script>
     const BOT_USERNAME = 'bot';
     let pollTimer = null;
+    let loadingMessages = false;
 
     // ---- view state ----
     async function checkAuth() {
-        // A logged-out request to a protected route is redirected to login (opaque to fetch).
-        const r = await fetch('/api/messages', { redirect: 'manual' });
-        if (r.type === 'opaqueredirect' || r.status === 0 || r.status === 401) showGreeting();
-        else showChat();
+        try {
+            // A logged-out request to a protected route is redirected to login (opaque to fetch).
+            const r = await fetch('/api/messages', {redirect: 'manual'});
+            if (r.type === 'opaqueredirect' || r.status === 0 || r.status === 401) showGreeting();
+            else showChat();
+        } catch (_) { showGreeting(); }
     }
     function showGreeting() {
         // inline display overrides the `hidden` attr and the #id CSS rules
@@ -150,9 +153,18 @@
         loadMessages();
     }
     async function loadMessages() {
-        const r = await fetch('/api/messages');
-        if (!r.ok) { if (r.status === 401) showGreeting(); return; }
-        renderMessages(await r.json());
+        if (loadingMessages) return;
+        loadingMessages = true;
+        try {
+            const r = await fetch('/api/messages');
+            if (!r.ok) {
+                if (r.status === 401) showGreeting();
+                return;
+            }
+            renderMessages(await r.json());
+        } finally {
+        loadingMessages = false;
+        }
     }
     function badgeFor(m) {
         if (m.username === BOT_USERNAME) return { cls: 'bot', label: 'Bot' };
