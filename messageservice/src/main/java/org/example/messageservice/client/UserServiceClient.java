@@ -1,5 +1,7 @@
 package org.example.messageservice.client;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.grpc.GetUserByUsernameRequest;
@@ -11,6 +13,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * gRPC client to userservice, used to enrich message reads with author info.
@@ -30,10 +33,15 @@ public class UserServiceClient {
         Map<String, UserProfile> result = new HashMap<>();
         for (String username : new HashSet<>(usernames)) {
             try {
-                result.put(username, userStub.getUserByUsername(
+                result.put(username, userStub.withDeadlineAfter(500, TimeUnit.MILLISECONDS).getUserByUsername(
                         GetUserByUsernameRequest.newBuilder().setUsername(username).build()));
-            } catch (RuntimeException e) {
-                log.debug("No userservice profile for '{}': {}", username, e.getMessage());
+            } catch (StatusRuntimeException e) {
+                if (e.getStatus().getCode() == Status.Code.NOT_FOUND) {
+                    log.debug("No userservice profile for: '{}'", username);
+                } else {
+                    log.warn("Failed to get user profile for: '{}', {}", username, e.getStatus(), e);
+                }
+
             }
         }
         return result;

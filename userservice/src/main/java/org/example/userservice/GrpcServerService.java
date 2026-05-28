@@ -51,6 +51,12 @@ public class GrpcServerService extends UserServiceGrpc.UserServiceImplBase {
 
     @Override
     public void getUserByUsername(GetUserByUsernameRequest request, StreamObserver<UserProfile> responseObserver) {
+        if (request.getUsername().isBlank()) {
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT.withDescription("Username is required").asRuntimeException()
+            );
+            return;
+        }
         UserEntity user = userRepository.findByUsername(request.getUsername());
         if (user == null) {
             responseObserver.onError(Status.NOT_FOUND.withDescription("User not found").asRuntimeException());
