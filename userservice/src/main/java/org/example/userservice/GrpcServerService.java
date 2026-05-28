@@ -3,6 +3,7 @@ package org.example.userservice;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
+import org.example.grpc.GetUserByUsernameRequest;
 import org.example.grpc.GetUserRequest;
 import org.example.grpc.UserProfile;
 import org.example.grpc.UserServiceGrpc;
@@ -33,6 +34,30 @@ public class GrpcServerService extends UserServiceGrpc.UserServiceImplBase {
         }
 
         UserEntity user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            responseObserver.onError(Status.NOT_FOUND.withDescription("User not found").asRuntimeException());
+            return;
+        }
+
+        UserProfile profile = UserProfile.newBuilder()
+                .setId(user.getId().toString())
+                .setUsername(user.getUsername())
+                .setRole(user.getRole() != null ? user.getRole().name() : "")
+                .build();
+
+        responseObserver.onNext(profile);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getUserByUsername(GetUserByUsernameRequest request, StreamObserver<UserProfile> responseObserver) {
+        if (request.getUsername().isBlank()) {
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT.withDescription("Username is required").asRuntimeException()
+            );
+            return;
+        }
+        UserEntity user = userRepository.findByUsername(request.getUsername());
         if (user == null) {
             responseObserver.onError(Status.NOT_FOUND.withDescription("User not found").asRuntimeException());
             return;
