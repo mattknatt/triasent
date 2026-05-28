@@ -7,18 +7,11 @@ or on Kubernetes.
 
 ![Java](https://img.shields.io/badge/Java-25-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
-![Spring Security](https://img.shields.io/badge/Spring%20Authorization%20Server-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white)
-![Spring Cloud Gateway](https://img.shields.io/badge/Spring%20Cloud%20Gateway%20MVC-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)
 ![gRPC](https://img.shields.io/badge/gRPC-244c5a?style=for-the-badge&logo=google&logoColor=white)
-![Caffeine](https://img.shields.io/badge/Caffeine-6F4E37?style=for-the-badge&logo=coffeescript&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
-![Helm](https://img.shields.io/badge/Bitnami%20Helm%20Charts-0F1689?style=for-the-badge&logo=helm&logoColor=white)
-
-> gRPC links userservice ↔ authservice / messageservice. Caffeine is used only for
-> event-dedup in the bot, not for caching application state.
 
 ## Design goals
 
@@ -35,7 +28,8 @@ This project focuses on realistic distributed-system concerns:
 ## Architecture
 
 ```mermaid
-flowchart LR
+%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 70, 'curve': 'basis'}, 'themeVariables': {'fontSize': '18px'}}}%%
+flowchart TB
     user([User browser])
 
     subgraph edge[Edge]
