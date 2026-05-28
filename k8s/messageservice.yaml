@@ -37,6 +37,8 @@ spec:
               value: userservice
             - name: AUTHSERVICE_HOST
               value: authservice
+            - name: APP_BOT_USER_ID           # shared with authservice/botservice
+              value: "00000000-0000-0000-0000-000000000b07"
 ---
 apiVersion: v1
 kind: Service

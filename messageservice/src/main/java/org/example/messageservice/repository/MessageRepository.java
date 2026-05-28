@@ -10,8 +10,6 @@ import java.util.UUID;
 
 @Repository
 public interface MessageRepository extends JpaRepository<MessageEntity, UUID> {
-    List<MessageEntity> findAllByOrderByCreatedAtDesc();
-    List<MessageEntity> findAllByUsernameOrderByCreatedAtDesc(String username);
-    List<MessageEntity> findAllByOwnerUsernameOrderByCreatedAtDesc(String ownerUsername);
+    List<MessageEntity> findAllByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
     Optional<MessageEntity> findByIdempotencyKey(String idempotencyKey);
 }

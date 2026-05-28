@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -48,8 +49,9 @@ class OutboxFlowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void postingAMessage_createsOutboxRow_andRelayPublishesToRabbit() throws Exception {
+        UUID alice = UUID.fromString("11111111-1111-1111-1111-111111111111");
         mockMvc.perform(post("/messages")
-                        .with(jwt().jwt(jwtFor("alice")))
+                        .with(jwt().jwt(jwtFor(alice.toString())))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"hello outbox\"}"))
                 .andExpect(status().isOk());
@@ -72,7 +74,7 @@ class OutboxFlowIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(delivered).isNotNull();
         JsonNode body = MAPPER.readTree(delivered.getBody());
-        assertThat(body.get("username").asText()).isEqualTo("alice");
+        assertThat(body.get("userId").asText()).isEqualTo(alice.toString());
         assertThat(body.get("content").asText()).isEqualTo("hello outbox");
         assertThat(body.has("id")).isTrue();
         assertThat(body.has("createdAt")).isTrue();

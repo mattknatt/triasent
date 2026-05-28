@@ -37,6 +37,8 @@ spec:
                 secretKeyRef:
                   name: oauth-clients
                   key: bot-client-secret
+            - name: APP_BOT_USER_ID           # shared with authservice/messageservice
+              value: "00000000-0000-0000-0000-000000000b07"
           envFrom:
             - secretRef:
                 name: llm-credentials     # LLM_API_URL / LLM_API_KEY / LLM_API_MODEL

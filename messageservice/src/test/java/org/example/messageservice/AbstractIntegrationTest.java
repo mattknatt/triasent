@@ -24,7 +24,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -110,8 +109,8 @@ public abstract class AbstractIntegrationTest {
         return new Jwt("token-" + subject, Instant.now(), Instant.now().plusSeconds(300), headers, claims);
     }
 
-    protected void mockUserProfilesEmpty(Collection<String> usernames) {
-        org.mockito.Mockito.when(userServiceClient.profilesByUsername(org.mockito.ArgumentMatchers.anyCollection()))
+    protected void mockUserProfilesEmpty() {
+        org.mockito.Mockito.when(userServiceClient.profilesById(org.mockito.ArgumentMatchers.anyCollection()))
                 .thenReturn(Map.of());
     }
 }

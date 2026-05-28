@@ -52,6 +52,7 @@ services:
       AUTHSERVICE_HOST: authservice
       GATEWAY_CLIENT_SECRET: ${GATEWAY_CLIENT_SECRET}
       BOT_CLIENT_SECRET: ${BOT_CLIENT_SECRET}
+      APP_BOT_USER_ID: ${APP_BOT_USER_ID}
     ports: ["9000:9000"]
 
   messageservice:
@@ -65,6 +66,7 @@ services:
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       USERSERVICE_HOST: userservice
       AUTHSERVICE_HOST: authservice
+      APP_BOT_USER_ID: ${APP_BOT_USER_ID}
     ports: ["8081:8081"]
 
   bff:
@@ -89,6 +91,7 @@ services:
       AUTHSERVICE_HOST: authservice
       MESSAGESERVICE_HOST: messageservice
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_BOT_CLIENT_SECRET: ${BOT_CLIENT_SECRET}
+      APP_BOT_USER_ID: ${APP_BOT_USER_ID}
     # consumer only — no published port needed
 
   client:

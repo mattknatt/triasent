@@ -21,6 +21,10 @@ import java.util.UUID;
  * role/content shape the LLM expects ("assistant" for bot rows, "user" for human rows).
  * Replaces the previous in-process Caffeine cache, so history survives bot restarts and
  * is consistent across replicas — messageservice's database is the single source of truth.
+ *
+ * <p>Bot rows are identified by user-id (compared to the reserved bot UUID) rather than
+ * by display name. That keeps the role mapping correct even if the controller's
+ * display-name substitution ever changes.
  */
 @Component
 public class MessageHistoryClient {
@@ -31,13 +35,13 @@ public class MessageHistoryClient {
 
     private final RestClient restClient;
     private final OAuth2AuthorizedClientManager authorizedClientManager;
-    private final String botUsername;
+    private final UUID botUserId;
 
     public MessageHistoryClient(@Value("${app.messageservice.url}") String baseUrl,
-                                @Value("${app.bot.username}") String botUsername,
+                                @Value("${app.bot.user-id}") UUID botUserId,
                                 OAuth2AuthorizedClientManager authorizedClientManager) {
         this.restClient = RestClient.create(baseUrl);
-        this.botUsername = botUsername;
+        this.botUserId = botUserId;
         this.authorizedClientManager = authorizedClientManager;
     }
 
@@ -45,10 +49,10 @@ public class MessageHistoryClient {
      * Returns the owner's messages in chronological (oldest-first) order, mapped to LLM
      * roles. messageservice sorts desc, so we reverse before returning.
      */
-    public List<Message> fetchHistory(String ownerUsername) {
+    public List<Message> fetchHistory(UUID ownerUserId) {
         List<MessageItem> items = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/messages")
-                        .queryParam("ownerUsername", ownerUsername)
+                        .queryParam("ownerUserId", ownerUserId.toString())
                         .build())
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken())
                 .retrieve()
@@ -58,7 +62,7 @@ public class MessageHistoryClient {
 
         List<Message> history = new ArrayList<>(items.size());
         for (MessageItem item : items) {
-            String role = botUsername.equalsIgnoreCase(item.username()) ? "assistant" : "user";
+            String role = botUserId.equals(item.userId()) ? "assistant" : "user";
             history.add(new Message(role, item.content()));
         }
         Collections.reverse(history);
@@ -77,5 +81,5 @@ public class MessageHistoryClient {
         return client.getAccessToken().getTokenValue();
     }
 
-    record MessageItem(UUID id, String username, String content, Instant createdAt, String authorRole) {}
+    record MessageItem(UUID id, UUID userId, String username, String content, Instant createdAt, String authorRole) {}
 }

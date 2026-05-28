@@ -9,9 +9,13 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.UUID;
+
 /**
  * Posts the bot's reply to messageservice (POST /messages) with a client-credentials
- * bearer token. Because the token's subject is "bot", the message is authored by "bot".
+ * bearer token. The bot's JWT subject is the reserved bot UUID, so the message is
+ * authored by the bot but attributed to the originating user's conversation via the
+ * X-Conversation-Owner header.
  */
 @Component
 public class BotReplyClient {
@@ -27,12 +31,12 @@ public class BotReplyClient {
         this.authorizedClientManager = authorizedClientManager;
     }
 
-    public void postReply(String content, String conversationOwner, String idempotencyKey) {
+    public void postReply(String content, UUID conversationOwner, String idempotencyKey) {
         restClient.post()
                 .uri("/messages")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken())
                 .header("Idempotency-Key", idempotencyKey)
-                .header("X-Conversation-Owner", conversationOwner)
+                .header("X-Conversation-Owner", conversationOwner.toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new CreateMessageRequest(content))
                 .retrieve()
