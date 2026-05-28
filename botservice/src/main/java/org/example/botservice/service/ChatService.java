@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+
 @Service
 @RequiredArgsConstructor
 public class ChatService {
@@ -25,15 +26,19 @@ public class ChatService {
     private final LlmClient llmClient;
 
     public ChatResponse chat(ChatRequest request) {
+        // sessionId now carries the user's UUID (set by MessageEventListener from the event).
+        // The fallback random UUID keeps the response shape consistent if some other caller
+        // ever invokes ChatService without a session — history will simply be empty.
         String sessionId = (request.sessionId() == null || request.sessionId().isBlank())
                 ? UUID.randomUUID().toString()
                 : request.sessionId();
+        UUID ownerUserId = UUID.fromString(sessionId);
 
         // History from messageservice already includes the user message we're responding to
         // (messageservice persists the row before publishing the event), so we don't append
         // request.message() again. The empty-history branch is the fallback for the very
         // first turn or if the read fails: we still want the LLM to see something.
-        List<Message> history = historyClient.fetchHistory(sessionId);
+        List<Message> history = historyClient.fetchHistory(ownerUserId);
 
         List<Message> messages = new ArrayList<>();
         messages.add(new Message("system", SYSTEM_PROMPT));

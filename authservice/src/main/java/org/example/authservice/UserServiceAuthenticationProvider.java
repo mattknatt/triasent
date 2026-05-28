@@ -45,7 +45,11 @@ public class UserServiceAuthenticationProvider implements AuthenticationProvider
                 FactorGrantedAuthority.withAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY)
                         .issuedAt(Instant.now())
                         .build());
-        var principal = User.withUsername(response.getUsername())
+        // The principal's "username" becomes the JWT subject (sub) downstream. We pin it
+        // to the stable user UUID so renames don't orphan their own messages, and so the
+        // owner_user_id foreign-keyish reference in messageservice stays sound. The actual
+        // display name is fetched on demand via userservice gRPC.
+        var principal = User.withUsername(response.getId())
                 .password("")
                 .authorities(authorities)
                 .build();

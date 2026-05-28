@@ -19,18 +19,17 @@ public class MessageEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
-    private String username;
+    /** Author of the row — the JWT subject of whoever POSTed. Bot uses a reserved UUID. */
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
 
     /**
-     * Whose conversation this message belongs to. For human posts this equals the author
-     * ({@link #username}); for bot replies it is the human the bot is replying to. The
+     * Whose conversation this message belongs to. For human posts this equals
+     * {@link #userId}; for bot replies it is the human the bot is replying to. The
      * GET /messages list filters by this so each user only sees their own thread.
-     * Nullable in the schema so Hibernate's ddl-auto=update can add it without rewriting
-     * existing rows — the controller/service always populate it for new rows.
      */
-    @Column(name = "owner_username")
-    private String ownerUsername;
+    @Column(name = "owner_user_id", nullable = false)
+    private UUID ownerUserId;
 
     @Column(nullable = false, length = 2000)
     private String content;

@@ -22,7 +22,7 @@ This project focuses on realistic distributed-system concerns:
 - **Asynchronous, event-driven processing** — message creation publishes to RabbitMQ; the bot reacts independently of the user's HTTP request.
 - **Transactional messaging** — outbox pattern guarantees a `message.published` event is emitted iff the message row is committed.
 - **Service-ownership boundaries** — database-per-service, one bounded context per service, no shared schemas.
-- **User-isolated conversation history** — per-user `owner_username` partitioning means each user only sees their own thread, even though the bot writes back as a single shared identity.
+- **User-isolated conversation history** — per-user `owner_user_id` (UUID) partitioning means each user only sees their own thread, even though the bot writes back as a single shared identity.
 - **Production-style deployment patterns** — same architecture in Docker Compose and Kubernetes; secrets injected from environment, never committed.
 
 ## Architecture
@@ -90,17 +90,40 @@ Stateful infra: two PostgreSQL instances (database-per-service) and a RabbitMQ b
 (events). In Compose these are containers; in Kubernetes they come from the Bitnami Helm
 charts (see [`k8s/README.md`](k8s/README.md)).
 
+## Identity model
+
+Every JWT subject (`sub`) is a **stable user UUID**, not a username:
+
+- **Users** — authservice's `UserServiceAuthenticationProvider` sets the principal to the
+  UUID returned by userservice's `verifyCredentials` gRPC, so the issued JWT's `sub` is
+  that UUID. The display name is fetched on demand via `getUserProfile`.
+- **The bot** — uses `client_credentials`, whose default `sub` would be the client id
+  (`"bot"`). authservice's `OAuth2TokenCustomizer<JwtEncodingContext>` overrides the
+  subject to a reserved synthetic UUID (`00000000-0000-0000-0000-000000000b07`, configured
+  via `app.bot.user-id` — the same value lives in messageservice and botservice for the
+  authorization check and loop prevention respectively).
+
+messageservice stores authorship and thread ownership as UUIDs (`user_id` /
+`owner_user_id`) — never usernames. This means a user can rename themselves in
+userservice without orphaning their own messages, and the per-user filter (see below)
+keys off something stable.
+
 ## How a turn works
 
-1. User posts a message → SPA → BFF (`/api/messages` POST) → messageservice saves it with
-   `username = owner_username = <user>` and writes an outbox row in the same transaction.
-2. The outbox relay publishes a `message.published` event to RabbitMQ.
+1. User posts a message → SPA → BFF (`/api/messages` POST) → messageservice saves it
+   with `user_id = owner_user_id = <user-uuid from JWT>` and writes an outbox row in the
+   same transaction.
+2. The outbox relay publishes a `message.published` event to RabbitMQ (payload carries
+   `userId`, not username).
 3. botservice consumes the event, fetches the full transcript for that user via
-   `GET /messages?ownerUsername=<user>` (its `bot` JWT is the only subject allowed to read
-   other owners' threads), calls the LLM, and POSTs the reply back to messageservice with
-   `X-Conversation-Owner: <user>` and an `Idempotency-Key`.
-4. The SPA polls `GET /api/messages`, which filters by the caller's JWT subject — so each
-   user only ever sees their own conversation.
+   `GET /messages?ownerUserId=<user-uuid>` (its JWT subject is the reserved bot UUID,
+   the only subject messageservice lets read another owner's thread), calls the LLM,
+   and POSTs the reply back to messageservice with `X-Conversation-Owner: <user-uuid>`
+   and an `Idempotency-Key`.
+4. The SPA polls `GET /api/messages`, which filters by the caller's JWT subject — so
+   each user only ever sees their own conversation. The response enriches each row with
+   the author's current display name via gRPC to userservice (bot rows show up as `"bot"`
+   without an RPC roundtrip).
 
 Conversation history lives in `messages_db` only — there's no separate bot cache, so
 context survives bot restarts and is consistent across replicas.

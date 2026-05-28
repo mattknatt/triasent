@@ -22,13 +22,13 @@ public class MessageEventListener {
     private final BotReplyClient botReplyClient;
     private final ProcessedEventStore processedEvents;
 
-    @Value("${app.bot.username}")
-    private String botUsername;
+    @Value("${app.bot.user-id}")
+    private java.util.UUID botUserId;
 
     @RabbitListener(queues = "${app.messaging.queue}")
     public void onMessagePublished(MessagePublishedEvent event) {
         // Loop prevention: ignore the bot's own messages so its replies don't re-trigger it.
-        if (botUsername.equalsIgnoreCase(event.username())) {
+        if (botUserId.equals(event.userId())) {
             log.debug("Skipping bot's own message {}", event.id());
             return;
         }
@@ -42,19 +42,19 @@ public class MessageEventListener {
         }
 
         try {
-            log.info("Received message.published from '{}': {}", event.username(), event.content());
+            log.info("Received message.published from user '{}': {}", event.userId(), event.content());
 
-            // sessionId = username: ChatService uses it as the ownerUsername when pulling
-            // the conversation transcript from messageservice.
-            ChatRequest request = new ChatRequest(event.content(), event.username());
+            // sessionId = the user's UUID: ChatService uses it as the ownerUserId when
+            // pulling the conversation transcript from messageservice.
+            ChatRequest request = new ChatRequest(event.content(), event.userId().toString());
             ChatResponse response = chatService.chat(request);
 
-            log.info("Bot reply for '{}' (session {}): {}",
-                    event.username(), response.sessionId(), response.response());
+            log.info("Bot reply for user '{}' (session {}): {}",
+                    event.userId(), response.sessionId(), response.response());
 
-            // Post the reply back as "bot", attributed to the original user's conversation
+            // Post the reply back as the bot, attributed to the original user's conversation
             // so only they see it; the source event id is the idempotency key.
-            botReplyClient.postReply(response.response(), event.username(), event.id().toString());
+            botReplyClient.postReply(response.response(), event.userId(), event.id().toString());
         } catch (RuntimeException e) {
             // Failed -> release the claim so the redelivery is retried instead of skipped.
             processedEvents.release(event.id());

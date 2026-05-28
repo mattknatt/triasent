@@ -19,6 +19,8 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
+import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -39,6 +41,9 @@ public class AuthorizationServerConfig {
 
     @Value("${oauth.bot-client.secret}")
     private String botClientSecret;
+
+    @Value("${app.bot.user-id}")
+    private String botUserId;
 
     @Bean
     public RegisteredClientRepository registeredClientRepository(PasswordEncoder passwordEncoder) {
@@ -89,6 +94,22 @@ public class AuthorizationServerConfig {
     @Bean
     JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwkSource) {
         return new NimbusJwtEncoder(jwkSource);
+    }
+
+    /**
+     * Bot tokens use the {@code client_credentials} grant, whose default {@code sub} is
+     * the client id ("bot"). Downstream services key authorship and ownership on UUIDs,
+     * so we override the subject to a reserved bot user-id. Users keep whatever subject
+     * the authentication provider set (their UUID).
+     */
+    @Bean
+    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
+        return context -> {
+            if (AuthorizationGrantType.CLIENT_CREDENTIALS.equals(context.getAuthorizationGrantType())
+                    && "bot".equals(context.getRegisteredClient().getClientId())) {
+                context.getClaims().subject(botUserId);
+            }
+        };
     }
 
     @Bean

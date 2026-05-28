@@ -4,7 +4,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.grpc.GetUserByUsernameRequest;
+import org.example.grpc.GetUserRequest;
 import org.example.grpc.UserProfile;
 import org.example.grpc.UserServiceGrpc;
 import org.springframework.stereotype.Component;
@@ -13,12 +13,13 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * gRPC client to userservice, used to enrich message reads with author info.
+ * gRPC client to userservice, used to enrich message reads with author display info.
  *
- * <p>Each distinct username is looked up once. A missing user or any gRPC error is
+ * <p>Each distinct user id is looked up once. A missing user or any gRPC error is
  * tolerated (that author is simply left un-enriched) so listing messages never fails
  * because of the user service.
  */
@@ -29,19 +30,21 @@ public class UserServiceClient {
 
     private final UserServiceGrpc.UserServiceBlockingStub userStub;
 
-    public Map<String, UserProfile> profilesByUsername(Collection<String> usernames) {
-        Map<String, UserProfile> result = new HashMap<>();
-        for (String username : new HashSet<>(usernames)) {
+    public Map<UUID, UserProfile> profilesById(Collection<UUID> userIds) {
+        Map<UUID, UserProfile> result = new HashMap<>();
+        for (UUID userId : new HashSet<>(userIds)) {
             try {
-                result.put(username, userStub.withDeadlineAfter(500, TimeUnit.MILLISECONDS).getUserByUsername(
-                        GetUserByUsernameRequest.newBuilder().setUsername(username).build()));
+                UserProfile profile = userStub.withDeadlineAfter(500, TimeUnit.MILLISECONDS)
+                        .getUserProfile(GetUserRequest.newBuilder().setUserId(userId.toString()).build());
+                result.put(userId, profile);
             } catch (StatusRuntimeException e) {
                 if (e.getStatus().getCode() == Status.Code.NOT_FOUND) {
-                    log.debug("No userservice profile for: '{}'", username);
+                    // Expected for the reserved bot user-id (no row in userservice) and for
+                    // any users that were deleted after their messages were posted.
+                    log.debug("No userservice profile for: '{}'", userId);
                 } else {
-                    log.warn("Failed to get user profile for: '{}', {}", username, e.getStatus(), e);
+                    log.warn("Failed to get user profile for: '{}', {}", userId, e.getStatus(), e);
                 }
-
             }
         }
         return result;
