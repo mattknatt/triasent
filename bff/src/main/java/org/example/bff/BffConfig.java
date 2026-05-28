@@ -5,7 +5,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.ServerRequest;
 import org.springframework.web.servlet.function.ServerResponse;
@@ -26,18 +29,32 @@ public class BffConfig {
     private String userserviceHost;
 
     @Bean
-    SecurityFilterChain security(HttpSecurity http) throws Exception {
+    SecurityFilterChain security(HttpSecurity http, ClientRegistrationRepository clientRegistrationRepository) throws Exception {
         return http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/users").permitAll()
                         .anyRequest().authenticated()
                 )
                 .csrf(csrf -> csrf.disable())
-                // Enable OAuth2 login (for browser users)
-                .oauth2Login(Customizer.withDefaults())
+                // OAuth2 login for browser users. Always return to the SPA root after login
+                // (ignore the saved pre-login request, e.g. the SPA's /api/messages auth probe,
+                // which would otherwise land the user on raw JSON).
+                .oauth2Login(oauth2 -> oauth2.defaultSuccessUrl("/", true))
                 // Enable OAuth2 client (needed for tokenRelay)
                 .oauth2Client(Customizer.withDefaults())
+                // RP-Initiated Logout: after clearing the local session, redirect the browser
+                // to the authservice's end_session endpoint so its SSO cookie is cleared too.
+                // Without this, the next login would silently reuse the existing auth-server
+                // session and the user would never see the login form again.
+                .logout(logout -> logout.logoutSuccessHandler(oidcLogoutSuccessHandler(clientRegistrationRepository)))
                 .build();
+    }
+
+    private LogoutSuccessHandler oidcLogoutSuccessHandler(ClientRegistrationRepository clientRegistrationRepository) {
+        OidcClientInitiatedLogoutSuccessHandler handler =
+                new OidcClientInitiatedLogoutSuccessHandler(clientRegistrationRepository);
+        handler.setPostLogoutRedirectUri("{baseUrl}/");
+        return handler;
     }
 
     @Bean

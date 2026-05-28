@@ -2,113 +2,213 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Triasent Demo Client</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Triasent Chat</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
-        section { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 6px; }
-        h2 { margin-top: 0; }
-        label { display: block; margin: .5rem 0 .2rem; font-size: .9rem; }
-        input, select, textarea { width: 100%; padding: .4rem; box-sizing: border-box; }
-        button { margin-top: .5rem; padding: .5rem 1rem; cursor: pointer; }
-        pre { background: #f4f4f4; padding: .5rem; border-radius: 4px; overflow-x: auto; font-size: .85rem; }
-        .row { display: flex; gap: .5rem; }
-        .row > * { flex: 1; }
+        :root {
+            --bg:#f5f6f8; --card:#fff; --border:#e4e7eb; --accent:#4f46e5;
+            --muted:#8a909a; --bot:#0d9488; --handler:#2563eb; --text:#1f2430;
+        }
+        * { box-sizing: border-box; }
+        body { margin:0; font-family: system-ui, -apple-system, sans-serif; background:var(--bg);
+               color:var(--text); height:100vh; display:flex; flex-direction:column; }
+
+        /* ---------- greeting ---------- */
+        #greeting { margin:auto; width:100%; max-width:380px; padding:1.5rem; }
+        .brand { font-weight:700; }
+        #greeting .brand { text-align:center; font-size:1.7rem; margin-bottom:1.25rem; }
+        .card { background:var(--card); border:1px solid var(--border); border-radius:12px;
+                padding:1.25rem; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+        .card + .card { margin-top:1rem; }
+        .card h2 { margin:0 0 .75rem; font-size:1rem; }
+        label { display:block; font-size:.78rem; color:var(--muted); margin:.6rem 0 .2rem; }
+        input, select { width:100%; padding:.55rem .6rem; border:1px solid var(--border);
+                        border-radius:8px; font-size:.95rem; background:#fff; }
+        button { font:inherit; cursor:pointer; border:none; border-radius:8px; padding:.6rem 1rem; }
+        .btn-primary { background:var(--accent); color:#fff; width:100%; font-weight:600; }
+        .btn-ghost { background:transparent; color:var(--accent); font-weight:600; }
+        .hint { font-size:.8rem; margin:.7rem 0 0; min-height:1em; }
+        .hint.ok { color:#0a7d33; } .hint.err { color:#c0392b; }
+
+        /* ---------- chat ---------- */
+        #chat { display:none; flex-direction:column; height:100vh; max-width:760px; width:100%; margin:0 auto; }
+        header { display:flex; align-items:center; justify-content:space-between;
+                 padding:.8rem 1rem; background:var(--card); border-bottom:1px solid var(--border); }
+        header .brand { font-size:1.15rem; }
+        #messages { flex:1; overflow-y:auto; padding:1rem; display:flex; flex-direction:column; gap:.55rem; }
+        .msg { background:var(--card); border:1px solid var(--border); border-radius:10px;
+               padding:.55rem .8rem; max-width:80%; align-self:flex-start; }
+        .msg .meta { display:flex; align-items:center; gap:.45rem; margin-bottom:.2rem; }
+        .msg .name { font-weight:600; font-size:.85rem; }
+        .msg .time { color:var(--muted); font-size:.7rem; margin-left:auto; padding-left:.5rem; }
+        .msg .text { white-space:pre-wrap; word-break:break-word; line-height:1.4; }
+        .badge { font-size:.62rem; font-weight:700; padding:.1rem .45rem; border-radius:999px;
+                 color:#fff; text-transform:uppercase; letter-spacing:.03em; }
+        .badge.bot { background:var(--bot); }
+        .badge.handler { background:var(--handler); }
+        .composer { display:flex; gap:.5rem; padding:.8rem 1rem; background:var(--card);
+                    border-top:1px solid var(--border); }
+        .composer input { flex:1; }
+        .composer button { background:var(--accent); color:#fff; font-weight:600; }
+        .empty { color:var(--muted); text-align:center; margin:auto; }
     </style>
 </head>
 <body>
 
-<h1>Triasent</h1>
+<!-- ===================== GREETING ===================== -->
+<div id="greeting" hidden>
+    <div class="brand">💬 Triasent</div>
 
-<section>
-    <h2>1. Create user</h2>
-    <p>Public endpoint. No auth needed.</p>
-    <div class="row">
-        <div>
-            <label>Username</label>
-            <input id="newUsername" value="alice">
-        </div>
-        <div>
-            <label>Password</label>
-            <input id="newPassword" type="password" value="pw">
-        </div>
-        <div>
-            <label>Role</label>
-            <select id="newRole">
-                <option>CUSTOMER</option>
-                <option>HANDLER</option>
-            </select>
-        </div>
+    <div class="card">
+        <h2>Welcome back</h2>
+        <button class="btn-primary" onclick="login()">Log in</button>
     </div>
-    <button onclick="createUser()">Create</button>
-    <pre id="createResult"></pre>
-</section>
 
-<section>
-    <h2>2. Log in</h2>
-    <p>Kicks off the OAuth Authorization Code flow. You'll be redirected to authservice's login page and back.</p>
-    <button onclick="login()">Log in</button>
-    <button onclick="checkAuth()">Check session</button>
-    <pre id="authResult"></pre>
-</section>
+    <div class="card">
+        <h2>Create an account</h2>
+        <label for="username">Username</label>
+        <input id="username" autocomplete="off">
+        <label for="password">Password</label>
+        <input id="password" type="password">
+        <label for="role">Role</label>
+        <select id="role">
+            <option value="CUSTOMER">Customer</option>
+            <option value="HANDLER">Handler</option>
+        </select>
+        <div style="margin-top:.9rem"><button class="btn-primary" onclick="createAccount()">Create account</button></div>
+        <p class="hint" id="createHint"></p>
+    </div>
+</div>
 
-<section>
-    <h2>3. Messages</h2>
-    <p>Requires an active session. BFF relays the JWT to messageservice.</p>
-    <label>New message content</label>
-    <textarea id="messageContent" rows="2">hello from the demo client</textarea>
-    <button onclick="postMessage()">Post</button>
-    <button onclick="loadMessages()">Refresh list</button>
-    <pre id="messagesResult"></pre>
-</section>
+<!-- ===================== CHAT ===================== -->
+<div id="chat" hidden>
+    <header>
+        <span class="brand">💬 Triasent</span>
+        <button class="btn-ghost" onclick="logout()">Log out</button>
+    </header>
+    <div id="messages"><div class="empty">Loading…</div></div>
+    <form class="composer" onsubmit="send(event)">
+        <input id="messageInput" placeholder="Type a message…" autocomplete="off" required>
+        <button type="submit">Send</button>
+    </form>
+</div>
 
 <script>
-    async function showJson(elId, response) {
-        const el = document.getElementById(elId);
-        const text = await response.text();
-        try { el.textContent = JSON.stringify(JSON.parse(text), null, 2); }
-        catch { el.textContent = `[${response.status}] ${text}`; }
-    }
+    const BOT_USERNAME = 'bot';
+    let pollTimer = null;
+    let loadingMessages = false;
 
-    async function createUser() {
-        const body = {
-            username: document.getElementById('newUsername').value,
-            password: document.getElementById('newPassword').value,
-            role: document.getElementById('newRole').value,
-        };
-        const r = await fetch('/api/users', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body),
-        });
-        await showJson('createResult', r);
-    }
-
-    function login() {
-        // Triggers Spring's OAuth2 client redirect to authservice's login form.
-        window.location.href = '/oauth2/authorization/authservice';
-    }
-
+    // ---- view state ----
     async function checkAuth() {
-        const r = await fetch('/api/messages', { redirect: 'manual' });
-        document.getElementById('authResult').textContent =
-            r.type === 'opaqueredirect' || r.status === 0
-                ? 'Not logged in (would be redirected to login).'
-                : `Logged in. /api/messages returned ${r.status}.`;
+        try {
+            // A logged-out request to a protected route is redirected to login (opaque to fetch).
+            const r = await fetch('/api/messages', {redirect: 'manual'});
+            if (r.type === 'opaqueredirect' || r.status === 0 || r.status === 401) showGreeting();
+            else showChat();
+        } catch (_) { showGreeting(); }
+    }
+    function showGreeting() {
+        // inline display overrides the `hidden` attr and the #id CSS rules
+        document.getElementById('greeting').style.display = 'block';
+        document.getElementById('chat').style.display = 'none';
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+    function showChat() {
+        document.getElementById('greeting').style.display = 'none';
+        document.getElementById('chat').style.display = 'flex';
+        loadMessages();
+        if (!pollTimer) pollTimer = setInterval(loadMessages, 3000);
     }
 
-    async function postMessage() {
-        const r = await fetch('/api/messages', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ content: document.getElementById('messageContent').value }),
+    // ---- auth actions ----
+    function login() { window.location.href = '/oauth2/authorization/authservice'; }
+    function logout() { window.location.href = '/logout'; }
+    async function createAccount() {
+        const hint = document.getElementById('createHint');
+        const body = {
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+            role: document.getElementById('role').value,
+        };
+        if (!body.username || !body.password) {
+            hint.className = 'hint err'; hint.textContent = 'Username and password are required.'; return;
+        }
+        const r = await fetch('/api/users', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
         });
-        await showJson('messagesResult', r);
+        if (r.ok) { hint.className = 'hint ok'; hint.textContent = `Account "${body.username}" created — now log in.`; }
+        else { hint.className = 'hint err'; hint.textContent = `Could not create account (HTTP ${r.status}).`; }
     }
 
-    async function loadMessages() {
-        const r = await fetch('/api/messages');
-        await showJson('messagesResult', r);
+    // ---- messages ----
+    async function send(e) {
+        e.preventDefault();
+        const input = document.getElementById('messageInput');
+        const content = input.value.trim();
+        if (!content) return;
+        input.value = '';
+        await fetch('/api/messages', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content }),
+        });
+        loadMessages();
     }
+    async function loadMessages() {
+        if (loadingMessages) return;
+        loadingMessages = true;
+        try {
+            const r = await fetch('/api/messages');
+            if (!r.ok) {
+                if (r.status === 401) showGreeting();
+                return;
+            }
+            renderMessages(await r.json());
+        } finally {
+        loadingMessages = false;
+        }
+    }
+    function badgeFor(m) {
+        if (m.username === BOT_USERNAME) return { cls: 'bot', label: 'Bot' };
+        if (m.authorRole === 'HANDLER') return { cls: 'handler', label: 'Handler' };
+        return null;
+    }
+    function renderMessages(messages) {
+        const box = document.getElementById('messages');
+        const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+        box.innerHTML = '';
+        if (!messages.length) {
+            const e = document.createElement('div');
+            e.className = 'empty'; e.textContent = 'No messages yet. Say hello 👋';
+            box.appendChild(e); return;
+        }
+        // API returns newest-first; show oldest at the top like a normal chat.
+        messages.slice().reverse().forEach(m => {
+            const msg = document.createElement('div'); msg.className = 'msg';
+
+            const meta = document.createElement('div'); meta.className = 'meta';
+            const name = document.createElement('span'); name.className = 'name';
+            name.textContent = m.username;                     // textContent => XSS-safe
+            meta.appendChild(name);
+
+            const b = badgeFor(m);
+            if (b) {
+                const badge = document.createElement('span');
+                badge.className = 'badge ' + b.cls; badge.textContent = b.label;
+                meta.appendChild(badge);
+            }
+            const time = document.createElement('span'); time.className = 'time';
+            time.textContent = m.createdAt
+                ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            meta.appendChild(time);
+
+            const text = document.createElement('div'); text.className = 'text';
+            text.textContent = m.content;
+            msg.appendChild(meta); msg.appendChild(text);
+            box.appendChild(msg);
+        });
+        if (atBottom) box.scrollTop = box.scrollHeight;
+    }
+
+    checkAuth();
 </script>
 </body>
 </html>
