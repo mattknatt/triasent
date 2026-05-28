@@ -18,8 +18,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MessageEventListener {
 
-    private static final String PERSONALITY = "helper";
-
     private final ChatService chatService;
     private final BotReplyClient botReplyClient;
     private final ProcessedEventStore processedEvents;
@@ -48,7 +46,7 @@ public class MessageEventListener {
 
             // sessionId = username: ChatService uses it as the ownerUsername when pulling
             // the conversation transcript from messageservice.
-            ChatRequest request = new ChatRequest(PERSONALITY, event.content(), event.username());
+            ChatRequest request = new ChatRequest(event.content(), event.username());
             ChatResponse response = chatService.chat(request);
 
             log.info("Bot reply for '{}' (session {}): {}",
