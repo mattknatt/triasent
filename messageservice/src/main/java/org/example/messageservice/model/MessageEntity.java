@@ -22,6 +22,16 @@ public class MessageEntity {
     @Column(nullable = false)
     private String username;
 
+    /**
+     * Whose conversation this message belongs to. For human posts this equals the author
+     * ({@link #username}); for bot replies it is the human the bot is replying to. The
+     * GET /messages list filters by this so each user only sees their own thread.
+     * Nullable in the schema so Hibernate's ddl-auto=update can add it without rewriting
+     * existing rows — the controller/service always populate it for new rows.
+     */
+    @Column(name = "owner_username")
+    private String ownerUsername;
+
     @Column(nullable = false, length = 2000)
     private String content;
 

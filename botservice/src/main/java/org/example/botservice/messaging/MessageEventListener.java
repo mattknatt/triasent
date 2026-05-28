@@ -46,15 +46,17 @@ public class MessageEventListener {
         try {
             log.info("Received message.published from '{}': {}", event.username(), event.content());
 
-            // sessionId = username gives each user a continuous conversation in ConversationMemory.
+            // sessionId = username: ChatService uses it as the ownerUsername when pulling
+            // the conversation transcript from messageservice.
             ChatRequest request = new ChatRequest(PERSONALITY, event.content(), event.username());
             ChatResponse response = chatService.chat(request);
 
             log.info("Bot reply for '{}' (session {}): {}",
                     event.username(), response.sessionId(), response.response());
 
-            // Post the reply back as "bot"; the source event id is the idempotency key.
-            botReplyClient.postReply(response.response(), event.id().toString());
+            // Post the reply back as "bot", attributed to the original user's conversation
+            // so only they see it; the source event id is the idempotency key.
+            botReplyClient.postReply(response.response(), event.username(), event.id().toString());
         } catch (RuntimeException e) {
             // Failed -> release the claim so the redelivery is retried instead of skipped.
             processedEvents.release(event.id());

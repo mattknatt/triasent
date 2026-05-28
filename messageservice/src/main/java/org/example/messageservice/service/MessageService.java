@@ -19,7 +19,7 @@ public class MessageService {
     private final OutboxWriter outbox;
 
     @Transactional
-    public MessageEntity post(String username, String content, String idempotencyKey) {
+    public MessageEntity post(String username, String ownerUsername, String content, String idempotencyKey) {
         // Idempotency: a repeated create with the same key returns the existing message
         // and skips both the insert and the outbox event, so retried/redelivered posts
         // produce no duplicate reply downstream. (The unique column is the hard backstop.)
@@ -32,6 +32,7 @@ public class MessageService {
 
         MessageEntity entity = new MessageEntity();
         entity.setUsername(username);
+        entity.setOwnerUsername(ownerUsername);
         entity.setContent(content);
         entity.setIdempotencyKey(idempotencyKey);
         MessageEntity saved = repository.save(entity);
@@ -44,7 +45,7 @@ public class MessageService {
         return saved;
     }
 
-    public List<MessageEntity> all() {
-        return repository.findAllByOrderByCreatedAtDesc();
+    public List<MessageEntity> forOwner(String ownerUsername) {
+        return repository.findAllByOwnerUsernameOrderByCreatedAtDesc(ownerUsername);
     }
 }
