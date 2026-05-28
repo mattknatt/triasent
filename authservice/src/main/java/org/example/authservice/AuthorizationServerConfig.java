@@ -43,7 +43,7 @@ public class AuthorizationServerConfig {
     private String botClientSecret;
 
     @Value("${app.bot.user-id}")
-    private String botUserId;
+    private UUID botUserId;
 
     @Bean
     public RegisteredClientRepository registeredClientRepository(PasswordEncoder passwordEncoder) {
@@ -107,7 +107,7 @@ public class AuthorizationServerConfig {
         return context -> {
             if (AuthorizationGrantType.CLIENT_CREDENTIALS.equals(context.getAuthorizationGrantType())
                     && "bot".equals(context.getRegisteredClient().getClientId())) {
-                context.getClaims().subject(botUserId);
+                context.getClaims().subject(botUserId.toString());
             }
         };
     }

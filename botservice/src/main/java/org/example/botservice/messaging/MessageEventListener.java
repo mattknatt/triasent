@@ -42,14 +42,16 @@ public class MessageEventListener {
         }
 
         try {
-            log.info("Received message.published from user '{}': {}", event.userId(), event.content());
+            log.info("Received message.published from user '{}'", event.userId());
+            log.debug("Received message.published from user '{}': {}", event.userId(), event.content());
 
             // sessionId = the user's UUID: ChatService uses it as the ownerUserId when
             // pulling the conversation transcript from messageservice.
             ChatRequest request = new ChatRequest(event.content(), event.userId().toString());
             ChatResponse response = chatService.chat(request);
 
-            log.info("Bot reply for user '{}' (session {}): {}",
+            log.info("Bot reply for user '{}' (session {})", event.userId(), response.sessionId());
+            log.debug("Bot reply for user '{}' (session {}): {}",
                     event.userId(), response.sessionId(), response.response());
 
             // Post the reply back as the bot, attributed to the original user's conversation

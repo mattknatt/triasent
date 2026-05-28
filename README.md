@@ -100,8 +100,9 @@ Every JWT subject (`sub`) is a **stable user UUID**, not a username:
 - **The bot** — uses `client_credentials`, whose default `sub` would be the client id
   (`"bot"`). authservice's `OAuth2TokenCustomizer<JwtEncodingContext>` overrides the
   subject to a reserved synthetic UUID (`00000000-0000-0000-0000-000000000b07`, configured
-  via `app.bot.user-id` — the same value lives in messageservice and botservice for the
-  authorization check and loop prevention respectively).
+  via `app.bot.user-id`, overridable with the `APP_BOT_USER_ID` env var — the same value
+  lives in messageservice and botservice for the authorization check and loop prevention
+  respectively, and the three services must agree, so the env var is the shared contract).
 
 messageservice stores authorship and thread ownership as UUIDs (`user_id` /
 `owner_user_id`) — never usernames. This means a user can rename themselves in
